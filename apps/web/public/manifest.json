@@ -1,0 +1,9 @@
+[
+	{
+		"id": "ak47",
+		"name": "AK-47",
+		"category": "rifle",
+		"file": "/models/ak47.glb",
+		"tier": "free"
+	}
+]

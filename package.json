@@ -1,0 +1,14 @@
+{
+	"name": "armoury",
+	"private": true,
+	"scripts": {
+		"dev": "pnpm --filter web dev",
+		"build": "pnpm --filter web build",
+		"test": "pnpm --filter @armoury/editor test",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write ."
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.0"
+	}
+}

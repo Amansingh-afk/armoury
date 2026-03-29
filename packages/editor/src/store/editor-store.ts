@@ -50,6 +50,8 @@ export interface EditorState {
 	fillActiveLayer: (pattern: PatternType, colors: string[]) => void;
 	importImage: (file: File) => Promise<void>;
 	importSticker: (file: File) => Promise<void>;
+	importImageBitmap: (bitmap: ImageBitmap, name: string) => void;
+	importStickerBitmap: (bitmap: ImageBitmap, name: string) => void;
 	setImageTransform: (layerId: number, transform: Partial<ImageTransform>) => void;
 	setBlendMode: (layerId: number, mode: BlendMode) => void;
 	setColorAdjust: (layerId: number, partial: Partial<ColorAdjust>) => void;
@@ -223,6 +225,26 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 				const bitmap = await createImageBitmap(file);
 				const layer = layerStack.addLayer();
 				layer.name = `⬡ ${file.name.replace(/\.[^.]+$/, "")}`;
+				layer.opacity = 1;
+				layer.setImage(bitmap, STICKER_IMAGE_TRANSFORM);
+				layer.renderImage();
+				set({ activeLayerId: layer.id });
+				bumpTexture();
+			},
+
+			importImageBitmap: (bitmap, name) => {
+				const layer = layerStack.addLayer();
+				layer.name = name.replace(/\.[^.]+$/, "");
+				layer.opacity = 1;
+				layer.setImage(bitmap);
+				layer.renderImage();
+				set({ activeLayerId: layer.id });
+				bumpTexture();
+			},
+
+			importStickerBitmap: (bitmap, name) => {
+				const layer = layerStack.addLayer();
+				layer.name = `⬡ ${name.replace(/\.[^.]+$/, "")}`;
 				layer.opacity = 1;
 				layer.setImage(bitmap, STICKER_IMAGE_TRANSFORM);
 				layer.renderImage();

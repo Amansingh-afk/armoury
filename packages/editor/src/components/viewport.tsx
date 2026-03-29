@@ -1,6 +1,17 @@
-import { Environment, OrbitControls } from "@react-three/drei";
+import { Environment, OrbitControls, Html } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { type ReactNode, Suspense } from "react";
+
+export function ModelLoadingFallback() {
+	return (
+		<Html center>
+			<div className="flex flex-col items-center gap-3">
+				<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+				<span className="text-xs text-zinc-500">Loading model...</span>
+			</div>
+		</Html>
+	);
+}
 
 export type LightingPreset = "studio" | "outdoor" | "dark";
 
@@ -32,7 +43,7 @@ export function Viewport({
 			>
 				<ambientLight intensity={0.4 * PRESET_INTENSITY[lightingPreset]} />
 				<directionalLight position={[5, 5, 5]} intensity={0.6 * PRESET_INTENSITY[lightingPreset]} />
-				<Suspense fallback={null}>
+				<Suspense fallback={<ModelLoadingFallback />}>
 					<Environment files={hdriPath} />
 				</Suspense>
 				<OrbitControls

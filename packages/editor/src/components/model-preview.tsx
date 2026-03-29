@@ -1,6 +1,6 @@
 "use client";
 
-import { Environment, OrbitControls } from "@react-three/drei";
+import { Environment, Html, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -206,7 +206,14 @@ export function ModelPreview({
 			>
 				<ambientLight intensity={0.4} />
 				<directionalLight position={[5, 5, 5]} intensity={0.6} />
-				<Suspense fallback={null}>
+				<Suspense fallback={
+					<Html center>
+						<div className="flex flex-col items-center gap-3">
+							<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+							<span className="text-xs text-zinc-500">Loading model...</span>
+						</div>
+					</Html>
+				}>
 					<Environment files={hdriPath} />
 					<PreviewScene
 						modelPath={modelPath}

@@ -13,6 +13,8 @@ import { LayersPanel } from "./layers-panel";
 import { StylePanel } from "./style-panel";
 import { TexturePaintView } from "./texture-paint-view";
 import { Toolbar, type WeaponPickerOption } from "./toolbar";
+import { ModelLoadingFallback } from "./viewport";
+import { ImageImportDialog, type ImageImportResult } from "./image-import-dialog";
 import { Viewport } from "./viewport";
 import { WeaponModel } from "./weapon-model";
 
@@ -58,16 +60,38 @@ export function SkinEditor({
 
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [showWireframe, setShowWireframe] = useState(true);
+	const [importDialogFile, setImportDialogFile] = useState<{ file: File; mode: "image" | "sticker" } | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const activeLayer = layerStack.layers.find((l) => l.id === activeLayerId);
 
 	const handleImportFile = useCallback(
-		async (file: File) => {
+		(file: File) => {
 			if (!file.type.startsWith("image/")) return;
-			await store.getState().importImage(file);
+			setImportDialogFile({ file, mode: "image" });
 		},
-		[store],
+		[],
+	);
+
+	const handleStickerFile = useCallback(
+		(file: File) => {
+			if (!file.type.startsWith("image/")) return;
+			setImportDialogFile({ file, mode: "sticker" });
+		},
+		[],
+	);
+
+	const handleImportConfirm = useCallback(
+		async (result: ImageImportResult) => {
+			const mode = importDialogFile?.mode ?? "image";
+			setImportDialogFile(null);
+			if (mode === "sticker") {
+				await store.getState().importStickerBitmap(result.bitmap, importDialogFile?.file.name ?? "sticker");
+			} else {
+				await store.getState().importImageBitmap(result.bitmap, importDialogFile?.file.name ?? "image");
+			}
+		},
+		[store, importDialogFile],
 	);
 
 	const handleImportClick = useCallback(() => {
@@ -205,7 +229,7 @@ export function SkinEditor({
 				canUndo={undoStack.length > 0}
 				canRedo={redoStack.length > 0}
 				onImportImage={handleImportClick}
-				onImportSticker={(file) => store.getState().importSticker(file)}
+				onImportSticker={handleStickerFile}
 				showWireframe={showWireframe}
 				onToggleWireframe={() => setShowWireframe((v) => !v)}
 				viewMode={viewMode}
@@ -241,7 +265,7 @@ export function SkinEditor({
 					{show3D && (
 						<div className={`relative ${show2D ? "flex-1 min-w-0" : "flex-1"}`}>
 							<Viewport hdriPath={hdriPath}>
-								<Suspense fallback={null}>
+								<Suspense fallback={<ModelLoadingFallback />}>
 									<WeaponModel
 										modelPath={modelPath}
 										layerStack={layerStack}
@@ -325,6 +349,13 @@ export function SkinEditor({
 				className="hidden"
 				onChange={handleFileInputChange}
 			/>
+			{importDialogFile && (
+				<ImageImportDialog
+					file={importDialogFile.file}
+					onConfirm={handleImportConfirm}
+					onCancel={() => setImportDialogFile(null)}
+				/>
+			)}
 		</div>
 	);
 }

@@ -24,7 +24,7 @@ export function Viewport({
 	return (
 		<div style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}>
 			<Canvas
-				camera={{ fov: 45, near: 0.001, far: 100 }}
+				camera={{ fov: 45, near: 0.01, far: 500 }}
 				gl={{ preserveDrawingBuffer: true, antialias: true }}
 				onCreated={({ gl }) => {
 					gl.domElement.style.touchAction = "none";
@@ -40,7 +40,7 @@ export function Viewport({
 					enablePan={true}
 					enableDamping={false}
 					minDistance={0.05}
-					maxDistance={10}
+					maxDistance={200}
 					minPolarAngle={0}
 					maxPolarAngle={Math.PI}
 				/>

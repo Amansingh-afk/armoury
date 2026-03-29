@@ -200,7 +200,7 @@ export function ModelPreview({
 	return (
 		<div className={className} style={{ position: "relative", width: "100%", height: "100%" }}>
 			<Canvas
-				camera={{ fov: 45, near: 0.001, far: 100 }}
+				camera={{ fov: 45, near: 0.01, far: 500 }}
 				gl={{ antialias: true, alpha: true }}
 				dpr={[1, 1.5]}
 			>

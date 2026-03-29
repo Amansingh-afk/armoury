@@ -1,7 +1,12 @@
-export function dilateSeams(imageData: ImageData, radius: number): ImageData {
+export function dilateSeams(
+	imageData: ImageData,
+	radius: number,
+	options?: { preserveAlpha?: boolean },
+): ImageData {
 	const { width, height } = imageData;
 	const src = new Uint8ClampedArray(imageData.data);
 	const dst = new Uint8ClampedArray(imageData.data);
+	const preserveAlpha = options?.preserveAlpha ?? false;
 
 	for (let iter = 0; iter < radius; iter++) {
 		src.set(dst);
@@ -25,7 +30,9 @@ export function dilateSeams(imageData: ImageData, radius: number): ImageData {
 						dst[idx] = src[nIdx];
 						dst[idx + 1] = src[nIdx + 1];
 						dst[idx + 2] = src[nIdx + 2];
-						dst[idx + 3] = src[nIdx + 3];
+						// Gutter pixels get color for seam prevention but stay
+						// alpha=0 so CS2 knows they're not painted
+						dst[idx + 3] = preserveAlpha ? 0 : src[nIdx + 3];
 						break;
 					}
 				}

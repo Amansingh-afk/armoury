@@ -105,8 +105,8 @@ export function SkinEditor({
 	const modelName = modelPath.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
 
 	const handleExportTGA = useCallback(() => {
-		const composited = layerStack.composite();
-		const dilated = dilateSeams(composited, 16);
+		const composited = layerStack.compositeForExport();
+		const dilated = dilateSeams(composited, 16, { preserveAlpha: true });
 		const tga = encodeTGA(dilated);
 		const blob = new Blob([tga.buffer as ArrayBuffer], { type: "application/octet-stream" });
 		downloadBlob(blob, `weapon_${modelName}_albedo.tga`);

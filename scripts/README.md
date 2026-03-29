@@ -4,27 +4,29 @@
 
 ### 1. Download the model
 
-Get CS2 weapon models from:
-- [Sketchfab](https://sketchfab.com) — search "CS2 weapon model", download as **GLB** format
-- CS2 Workshop Tools: Steam → CS2 → Properties → DLC, models in `Steam/steamapps/common/Counter-Strike Global Offensive/content/csgo/models/weapons/`
+**Recommended:** Download official Valve models from https://www.counter-strike.net/workshop/workshopresources — the "CS2 weapon models" zip (`cs2_weapon_model_geometry.zip`). These are OBJ files with exact UV layouts matching the in-game models, ensuring exported TGA textures align correctly in Workshop.
 
-### 2. Strip the GLB
+**Alternative:** Sketchfab CS2 models (GLB format). UVs may not match Valve's exactly — exported skins could appear misaligned in-game.
 
-```bash
-node scripts/strip-glb.mjs <source.glb> apps/web/public/models/<weapon>.glb
-```
+### 2. Convert OBJ to GLB
 
-Example with a Sketchfab download:
+For official Valve OBJ files:
 
 ```bash
-# Extract the GLB from the downloaded zip
-unzip rifle-awp-weapon-model-cs2.zip "source/*" -d /tmp/models/
+npm install -g obj2gltf
 
-# Strip and place in public/models
-node scripts/strip-glb.mjs /tmp/models/source/AWP.glb apps/web/public/models/awp.glb
+obj2gltf -i weapon_rif_ak47.obj -o apps/web/public/models/ak47.glb --binary
 ```
 
-The script prints a summary of the output — you should see a small number of nodes (typically 2-3), with the root node having `scale: [0.0254, 0.0254, 0.0254]` (Valve's inches-to-meters conversion).
+The output is already clean geometry — no stripping needed (no textures, bones, or animations in the OBJ files).
+
+For Sketchfab GLB files, use the strip script instead:
+
+```bash
+npm install -g @gltf-transform/cli
+
+node scripts/strip-glb.mjs source/AWP.glb apps/web/public/models/awp.glb
+```
 
 ### 3. Register in the editor
 
@@ -51,24 +53,13 @@ const WEAPONS = [
 
 ## Scripts
 
-### strip-glb.mjs (recommended)
+### strip-glb.mjs
 
-Strips textures, materials, bone nodes, animations, and extensions from a GLB. Outputs an uncompressed geometry-only model for skin painting.
+Strips textures, materials, bone nodes, animations, and extensions from a Sketchfab GLB. Not needed for official Valve OBJ models.
 
 **Prerequisites:** `npm install -g @gltf-transform/cli`
 
-**What it does:**
-1. Removes all textures and materials (the editor paints its own)
-2. Removes extensions like `KHR_draco_mesh_compression`
-3. Removes animations and skin/bone rigs
-4. Strips non-mesh node branches (e.g. `weapon_hand_r`, trigger, bolt, clip)
-5. Writes an uncompressed GLB
-
-### optimize-glb.mjs (legacy)
-
-Strips textures/materials and applies Draco compression. **Not recommended** — `useGLTF` from `@react-three/drei` doesn't include DRACOLoader by default, so Draco-compressed models load with broken geometry.
-
-### convert-model.py (legacy, for FBX sources)
+### convert-model.py
 
 Converts Valve FBX weapon models to GLB using Blender. Requires Blender 3.6+ on PATH.
 
@@ -78,12 +69,13 @@ blender --background --python scripts/convert-model.py -- path/to/weapon.fbx app
 
 ---
 
-## Why bone nodes must be stripped
+## TGA Export & Alpha Channel
 
-CS2 weapon models from Sketchfab include bone/animation nodes (`weapon_hand_r`, clip, trigger, bolt) with large translations (up to ~15 units). These nodes have no mesh geometry but inflate the Three.js `Box3.setFromObject()` bounding box, causing the camera auto-fit to zoom way out and making the weapon appear tiny relative to the UV wireframe.
+The TGA export uses `compositeForExport()` which produces a Workshop-compatible texture:
 
-The `strip-glb.mjs` script removes these nodes at the file level, leaving only the scene root (with the 0.0254 scale) and the mesh node(s).
+- **RGB** = skin color (composited layers without wear applied)
+- **Alpha** = paint coverage mask (255 = painted, 0 = bare metal)
+- **Seam dilation** = 16px color spread into UV gutters (alpha stays 0 for dilated pixels)
+- **Wear** is NOT baked into the export — CS2's engine handles wear via `wearremapmin`/`wearremapmax` based on the alpha mask
 
-## Why no Draco compression
-
-`useGLTF` from `@react-three/drei` does not configure a `DRACOLoader` by default. Loading a Draco-compressed GLB silently produces broken geometry (vertices at origin, degenerate triangles). The uncompressed GLBs are 2-5MB which is fine for this use case.
+The base layer (white fill) starts everything as "painted" (alpha=255). Areas with no layer content export as bare metal (alpha=0).

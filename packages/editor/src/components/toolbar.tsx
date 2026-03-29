@@ -6,6 +6,7 @@ export interface WeaponPickerOption {
 	id: string;
 	label: string;
 	path: string;
+	category?: string;
 }
 
 interface ToolbarProps {
@@ -69,11 +70,28 @@ export function Toolbar({
 						onChange={(e) => weaponPicker.onSelect(e.target.value)}
 						className="shrink-0 rounded border border-zinc-700 bg-zinc-800 py-1 pl-2 pr-6 text-xs text-zinc-200 outline-none hover:bg-zinc-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 					>
-						{weaponPicker.options.map((w) => (
-							<option key={w.id} value={w.id}>
-								{w.label}
-							</option>
-						))}
+						{(() => {
+							const hasCategories = weaponPicker.options.some((w) => w.category);
+							if (!hasCategories) {
+								return weaponPicker.options.map((w) => (
+									<option key={w.id} value={w.id}>{w.label}</option>
+								));
+							}
+							const groups: [string, WeaponPickerOption[]][] = [];
+							for (const w of weaponPicker.options) {
+								const cat = w.category || "Other";
+								const group = groups.find(([c]) => c === cat);
+								if (group) group[1].push(w);
+								else groups.push([cat, [w]]);
+							}
+							return groups.map(([cat, weapons]) => (
+								<optgroup key={cat} label={cat}>
+									{weapons.map((w) => (
+										<option key={w.id} value={w.id}>{w.label}</option>
+									))}
+								</optgroup>
+							));
+						})()}
 					</select>
 					<div className="mx-1 h-4 w-px bg-zinc-700" />
 				</>

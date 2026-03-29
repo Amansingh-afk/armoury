@@ -260,6 +260,73 @@ export class LayerStack {
 		return this.cachedCompositeResult;
 	}
 
+	/**
+	 * Composite for Workshop export.
+	 * - Transparent background (alpha=0 for unpainted pixels)
+	 * - No wear applied (CS2 engine handles wear via alpha + wearremapmin/max)
+	 * - Alpha channel = paint coverage mask (255 = painted, 0 = bare metal)
+	 */
+	compositeForExport(): ImageData {
+		const ctx = this.compositeCanvas.getContext();
+		this.compositeCanvas.clear();
+
+		for (const layer of this.layers) {
+			if (!layer.visible) continue;
+
+			const needsColorAdj = hasColorAdjust(layer.colorAdjust);
+			const needsEmboss = layer.emboss && layer.embossStrength > 0;
+			const needsPixelBlend = layer.blendMode !== "normal" || needsColorAdj || needsEmboss;
+
+			if (!needsPixelBlend) {
+				ctx.globalAlpha = layer.opacity;
+				ctx.drawImage(layer.textureCanvas.canvas, 0, 0);
+			} else {
+				const baseData = ctx.getImageData(0, 0, this.width, this.height);
+				const layerData = layer.textureCanvas.getImageData();
+
+				if (needsColorAdj) {
+					applyColorAdjust(layerData, layer.colorAdjust);
+				}
+
+				if (needsEmboss) {
+					applyEmboss(layerData, layer.embossStrength);
+				}
+
+				const bd = baseData.data;
+				const ld = layerData.data;
+				const alpha = layer.opacity;
+				const mode = layer.blendMode;
+
+				for (let i = 0; i < bd.length; i += 4) {
+					const srcA = (ld[i + 3] / 255) * alpha;
+					if (srcA === 0) continue;
+
+					const dstA = bd[i + 3] / 255;
+					const outA = srcA + dstA * (1 - srcA);
+
+					if (outA === 0) continue;
+
+					if (mode === "normal") {
+						bd[i] = Math.round((ld[i] * srcA + bd[i] * dstA * (1 - srcA)) / outA);
+						bd[i + 1] = Math.round((ld[i + 1] * srcA + bd[i + 1] * dstA * (1 - srcA)) / outA);
+						bd[i + 2] = Math.round((ld[i + 2] * srcA + bd[i + 2] * dstA * (1 - srcA)) / outA);
+					} else {
+						bd[i] = Math.round((blendChannel(bd[i], ld[i], mode) * srcA + bd[i] * dstA * (1 - srcA)) / outA);
+						bd[i + 1] = Math.round((blendChannel(bd[i + 1], ld[i + 1], mode) * srcA + bd[i + 1] * dstA * (1 - srcA)) / outA);
+						bd[i + 2] = Math.round((blendChannel(bd[i + 2], ld[i + 2], mode) * srcA + bd[i + 2] * dstA * (1 - srcA)) / outA);
+					}
+
+					bd[i + 3] = Math.round(outA * 255);
+				}
+
+				ctx.putImageData(baseData, 0, 0);
+			}
+		}
+
+		ctx.globalAlpha = 1;
+		return this.compositeCanvas.getImageData();
+	}
+
 	private updateWearMask(): void {
 		if (this.cachedWearLevel === this.wearLevel && this.cachedWearSharpness === this.wearSharpness) return;
 

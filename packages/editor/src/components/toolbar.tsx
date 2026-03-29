@@ -1,13 +1,25 @@
 import { useRef } from "react";
 import type { BrushSettings } from "../painting/types";
-import type { StickerState, Tool, ViewMode } from "../store/editor-store";
+import type { Tool, ViewMode } from "../store/editor-store";
+
+export interface WeaponPickerOption {
+	id: string;
+	label: string;
+	path: string;
+}
 
 interface ToolbarProps {
+	weaponPicker?: {
+		options: WeaponPickerOption[];
+		selectedId: string;
+		onSelect: (id: string) => void;
+	};
 	onUndo: () => void;
 	onRedo: () => void;
 	canUndo: boolean;
 	canRedo: boolean;
 	onImportImage: () => void;
+	onImportSticker: (file: File) => void;
 	showWireframe: boolean;
 	onToggleWireframe: () => void;
 	viewMode: ViewMode;
@@ -16,11 +28,6 @@ interface ToolbarProps {
 	onSetTool: (tool: Tool) => void;
 	brush: BrushSettings;
 	onBrushChange: (partial: Partial<BrushSettings>) => void;
-	sticker: StickerState | null;
-	onLoadSticker: (file: File) => void;
-	onStickerScaleChange: (scale: number) => void;
-	onStickerRotationChange: (rotation: number) => void;
-	onClearSticker: () => void;
 }
 
 const VIEW_MODES: { value: ViewMode; label: string }[] = [
@@ -30,11 +37,13 @@ const VIEW_MODES: { value: ViewMode; label: string }[] = [
 ];
 
 export function Toolbar({
+	weaponPicker,
 	onUndo,
 	onRedo,
 	canUndo,
 	canRedo,
 	onImportImage,
+	onImportSticker,
 	showWireframe,
 	onToggleWireframe,
 	viewMode,
@@ -43,17 +52,32 @@ export function Toolbar({
 	onSetTool,
 	brush,
 	onBrushChange,
-	sticker,
-	onLoadSticker,
-	onStickerScaleChange,
-	onStickerRotationChange,
-	onClearSticker,
 }: ToolbarProps) {
 	const stickerInputRef = useRef<HTMLInputElement>(null);
 	const show2DTools = viewMode === "2d" || viewMode === "split";
 
 	return (
 		<div className="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900 px-3 py-1.5">
+			{weaponPicker && weaponPicker.options.length > 0 && (
+				<>
+					<label className="sr-only" htmlFor="armoury-weapon-select">
+						Weapon model
+					</label>
+					<select
+						id="armoury-weapon-select"
+						value={weaponPicker.selectedId}
+						onChange={(e) => weaponPicker.onSelect(e.target.value)}
+						className="shrink-0 rounded border border-zinc-700 bg-zinc-800 py-1 pl-2 pr-6 text-xs text-zinc-200 outline-none hover:bg-zinc-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+					>
+						{weaponPicker.options.map((w) => (
+							<option key={w.id} value={w.id}>
+								{w.label}
+							</option>
+						))}
+					</select>
+					<div className="mx-1 h-4 w-px bg-zinc-700" />
+				</>
+			)}
 			<button
 				type="button"
 				onClick={onImportImage}
@@ -61,6 +85,24 @@ export function Toolbar({
 			>
 				Import Image
 			</button>
+			<button
+				type="button"
+				onClick={() => stickerInputRef.current?.click()}
+				className="rounded bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-500"
+			>
+				Add Sticker
+			</button>
+			<input
+				ref={stickerInputRef}
+				type="file"
+				accept="image/*"
+				className="hidden"
+				onChange={(e) => {
+					const file = e.target.files?.[0];
+					if (file) onImportSticker(file);
+					e.target.value = "";
+				}}
+			/>
 			<div className="mx-2 h-4 w-px bg-zinc-700" />
 			<button
 				type="button"
@@ -172,68 +214,6 @@ export function Toolbar({
 								onChange={(e) => onBrushChange({ hardness: Number.parseFloat(e.target.value) })}
 								className="w-12 h-1"
 							/>
-						</div>
-					)}
-
-					<div className="mx-1 h-4 w-px bg-zinc-700" />
-
-					{/* Sticker tool */}
-					<button
-						type="button"
-						onClick={() => stickerInputRef.current?.click()}
-						className={`rounded px-3 py-1 text-xs transition-colors ${
-							activeTool === "sticker"
-								? "bg-orange-600 text-white"
-								: "text-zinc-400 hover:bg-zinc-800"
-						}`}
-					>
-						Sticker
-					</button>
-					<input
-						ref={stickerInputRef}
-						type="file"
-						accept="image/*"
-						className="hidden"
-						onChange={(e) => {
-							const file = e.target.files?.[0];
-							if (file) onLoadSticker(file);
-							e.target.value = "";
-						}}
-					/>
-
-					{activeTool === "sticker" && sticker && (
-						<div className="flex items-center gap-2 ml-1">
-							<label className="text-[10px] text-zinc-500 whitespace-nowrap">
-								Scale: {sticker.scale.toFixed(2)}
-							</label>
-							<input
-								type="range"
-								min={0.05}
-								max={5}
-								step={0.01}
-								value={sticker.scale}
-								onChange={(e) => onStickerScaleChange(Number.parseFloat(e.target.value))}
-								className="w-16 h-1"
-							/>
-							<label className="text-[10px] text-zinc-500 whitespace-nowrap">
-								Rot: {Math.round(sticker.rotation * (180 / Math.PI))}°
-							</label>
-							<input
-								type="range"
-								min={-3.14159}
-								max={3.14159}
-								step={0.01}
-								value={sticker.rotation}
-								onChange={(e) => onStickerRotationChange(Number.parseFloat(e.target.value))}
-								className="w-16 h-1"
-							/>
-							<button
-								type="button"
-								onClick={onClearSticker}
-								className="rounded px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800"
-							>
-								Done
-							</button>
 						</div>
 					)}
 				</>

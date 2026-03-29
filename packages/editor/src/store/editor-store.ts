@@ -1,19 +1,14 @@
 import { createStore } from "zustand/vanilla";
 import { strokeBrush } from "../painting/brush";
 import { type PatternType, fillPattern } from "../painting/fill";
+import { STICKER_IMAGE_TRANSFORM } from "../painting/layer";
 import type { BlendMode, ColorAdjust, ImageTransform } from "../painting/layer";
 import { LayerStack } from "../painting/layer-stack";
 import type { BrushSettings } from "../painting/types";
 import type { UVIndex } from "../painting/uv-lookup";
 
-export type Tool = "pan" | "brush" | "sticker";
+export type Tool = "pan" | "brush";
 export type ViewMode = "3d" | "2d" | "split";
-
-export interface StickerState {
-	image: ImageBitmap;
-	scale: number;
-	rotation: number;
-}
 
 interface UndoEntry {
 	layerId: number;
@@ -37,7 +32,6 @@ export interface EditorState {
 	uvEdges: Array<[number, number, number, number]>;
 	uvIndex: UVIndex | null;
 	hoveredFaces: number[];
-	sticker: StickerState | null;
 
 	setBrush: (partial: Partial<BrushSettings>) => void;
 	setTool: (tool: Tool) => void;
@@ -55,6 +49,7 @@ export interface EditorState {
 	setMetallic: (value: number) => void;
 	fillActiveLayer: (pattern: PatternType, colors: string[]) => void;
 	importImage: (file: File) => Promise<void>;
+	importSticker: (file: File) => Promise<void>;
 	setImageTransform: (layerId: number, transform: Partial<ImageTransform>) => void;
 	setBlendMode: (layerId: number, mode: BlendMode) => void;
 	setColorAdjust: (layerId: number, partial: Partial<ColorAdjust>) => void;
@@ -67,11 +62,6 @@ export interface EditorState {
 	setUVIndex: (index: UVIndex) => void;
 	setHoveredFaces: (faces: number[]) => void;
 	paintStroke: (points: Array<{ x: number; y: number }>) => void;
-	loadSticker: (file: File) => Promise<void>;
-	setStickerScale: (scale: number) => void;
-	setStickerRotation: (rotation: number) => void;
-	placeSticker: (texX: number, texY: number) => void;
-	clearSticker: () => void;
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -109,7 +99,6 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 			uvEdges: [],
 			uvIndex: null,
 			hoveredFaces: [],
-			sticker: null,
 
 			setBrush: (partial) => set((state) => ({ brush: { ...state.brush, ...partial } })),
 
@@ -230,6 +219,17 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 				bumpTexture();
 			},
 
+			importSticker: async (file) => {
+				const bitmap = await createImageBitmap(file);
+				const layer = layerStack.addLayer();
+				layer.name = `⬡ ${file.name.replace(/\.[^.]+$/, "")}`;
+				layer.opacity = 1;
+				layer.setImage(bitmap, STICKER_IMAGE_TRANSFORM);
+				layer.renderImage();
+				set({ activeLayerId: layer.id });
+				bumpTexture();
+			},
+
 			setImageTransform: (layerId, partial) => {
 				const layer = layerStack.layers.find((l) => l.id === layerId);
 				if (!layer || !layer.isImageLayer) return;
@@ -295,44 +295,6 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 				if (!layer) return;
 				strokeBrush(layer.textureCanvas, points, state.brush);
 				bumpTexture();
-			},
-
-			loadSticker: async (file) => {
-				const bitmap = await createImageBitmap(file);
-				set({ sticker: { image: bitmap, scale: 1, rotation: 0 }, activeTool: "sticker" });
-			},
-
-			setStickerScale: (scale) => {
-				const s = get().sticker;
-				if (s) set({ sticker: { ...s, scale: Math.max(0.05, scale) } });
-			},
-
-			setStickerRotation: (rotation) => {
-				const s = get().sticker;
-				if (s) set({ sticker: { ...s, rotation } });
-			},
-
-			placeSticker: (texX, texY) => {
-				const state = get();
-				const s = state.sticker;
-				if (!s) return;
-				const layer = layerStack.layers.find((l) => l.id === state.activeLayerId);
-				if (!layer) return;
-
-				const ctx = layer.textureCanvas.getContext();
-				const sw = s.image.width * s.scale;
-				const sh = s.image.height * s.scale;
-
-				ctx.save();
-				ctx.translate(texX, texY);
-				ctx.rotate(s.rotation);
-				ctx.drawImage(s.image, -sw / 2, -sh / 2, sw, sh);
-				ctx.restore();
-				bumpTexture();
-			},
-
-			clearSticker: () => {
-				set({ sticker: null, activeTool: "pan" });
 			},
 		};
 	});

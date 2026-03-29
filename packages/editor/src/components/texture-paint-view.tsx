@@ -5,7 +5,7 @@ import { stampBrush } from "../painting/brush";
 import type { LayerStack } from "../painting/layer-stack";
 import type { BrushSettings } from "../painting/types";
 import { type UVIndex, findIslandAtUV } from "../painting/uv-lookup";
-import type { StickerState, Tool } from "../store/editor-store";
+import type { Tool } from "../store/editor-store";
 
 interface TexturePaintViewProps {
 	layerStack: LayerStack;
@@ -15,14 +15,11 @@ interface TexturePaintViewProps {
 	activeLayerId: number;
 	uvEdges: Array<[number, number, number, number]>;
 	showWireframe: boolean;
-	sticker: StickerState | null;
 	uvIndex: UVIndex | null;
 	hoveredFaces: number[];
 	onPushUndo: () => void;
 	onBumpTexture: () => void;
-	onPlaceSticker: (texX: number, texY: number) => void;
 	onHoveredFacesChange: (faces: number[]) => void;
-	stickerPreviewRef: React.MutableRefObject<{ x: number; y: number } | null>;
 }
 
 export function TexturePaintView({
@@ -33,14 +30,11 @@ export function TexturePaintView({
 	activeLayerId,
 	uvEdges,
 	showWireframe,
-	sticker,
 	uvIndex,
 	hoveredFaces,
 	onPushUndo,
 	onBumpTexture,
-	onPlaceSticker,
 	onHoveredFacesChange,
-	stickerPreviewRef,
 }: TexturePaintViewProps) {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -161,28 +155,7 @@ export function TexturePaintView({
 			ctx.arc(mousePos.x, mousePos.y, r, 0, Math.PI * 2);
 			ctx.stroke();
 		}
-
-		// Sticker preview
-		if (mousePos && activeTool === "sticker" && sticker) {
-			const sw = sticker.image.width * sticker.scale * viewScale;
-			const sh = sticker.image.height * sticker.scale * viewScale;
-			ctx.save();
-			ctx.globalAlpha = 0.7;
-			ctx.translate(mousePos.x, mousePos.y);
-			ctx.rotate(sticker.rotation);
-			ctx.drawImage(sticker.image, -sw / 2, -sh / 2, sw, sh);
-			ctx.restore();
-			// Crosshair
-			ctx.strokeStyle = "rgba(255, 200, 0, 0.6)";
-			ctx.lineWidth = 1;
-			ctx.beginPath();
-			ctx.moveTo(mousePos.x - 10, mousePos.y);
-			ctx.lineTo(mousePos.x + 10, mousePos.y);
-			ctx.moveTo(mousePos.x, mousePos.y - 10);
-			ctx.lineTo(mousePos.x, mousePos.y + 10);
-			ctx.stroke();
-		}
-	}, [textureVersion, canvasSize, viewOffset, viewScale, showWireframe, mousePos, activeTool, brush.size, layerStack, texW, texH, sticker, hoveredFaces, uvIndex]);
+	}, [textureVersion, canvasSize, viewOffset, viewScale, showWireframe, mousePos, activeTool, brush.size, layerStack, texW, texH, hoveredFaces, uvIndex]);
 
 	// Convert screen coords to texture coords
 	const screenToTex = useCallback(
@@ -215,13 +188,6 @@ export function TexturePaintView({
 				return;
 			}
 
-			if (activeTool === "sticker" && sticker && e.button === 0) {
-				const tex = screenToTex(sx, sy);
-				onPushUndo();
-				onPlaceSticker(tex.x, tex.y);
-				return;
-			}
-
 			if (activeTool === "brush" && e.button === 0) {
 				isPaintingRef.current = true;
 				(e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -237,7 +203,7 @@ export function TexturePaintView({
 				lastPaintPosRef.current = tex;
 			}
 		},
-		[activeTool, brush, activeLayerId, layerStack, screenToTex, viewOffset, onPushUndo, onBumpTexture, sticker, onPlaceSticker],
+		[activeTool, brush, activeLayerId, layerStack, screenToTex, viewOffset, onPushUndo, onBumpTexture],
 	);
 
 	const handlePointerMove = useCallback(
@@ -285,16 +251,8 @@ export function TexturePaintView({
 				const faces = findIslandAtUV(uvX, uvY, uvIndex);
 				onHoveredFacesChange(faces);
 			}
-
-			// Sticker 3D preview position
-			if (activeTool === "sticker" && sticker) {
-				const tex = screenToTex(sx, sy);
-				stickerPreviewRef.current = { x: tex.x, y: tex.y };
-			} else {
-				stickerPreviewRef.current = null;
-			}
 		},
-		[activeTool, brush, activeLayerId, layerStack, screenToTex, onBumpTexture, uvIndex, texW, texH, onHoveredFacesChange, sticker, stickerPreviewRef],
+		[activeTool, brush, activeLayerId, layerStack, screenToTex, onBumpTexture, uvIndex, texW, texH, onHoveredFacesChange],
 	);
 
 	const handlePointerUp = useCallback(() => {
@@ -333,14 +291,13 @@ export function TexturePaintView({
 		setMousePos(null);
 		isPanningRef.current = false;
 		onHoveredFacesChange([]);
-		stickerPreviewRef.current = null;
-	}, [onHoveredFacesChange, stickerPreviewRef]);
+	}, [onHoveredFacesChange]);
 
 	return (
 		<div ref={containerRef} className="relative w-full h-full overflow-hidden bg-zinc-950">
 			<canvas
 				ref={canvasRef}
-				className={`absolute inset-0 ${activeTool === "brush" ? "cursor-crosshair" : activeTool === "sticker" ? "cursor-none" : "cursor-grab"}`}
+				className={`absolute inset-0 ${activeTool === "brush" ? "cursor-crosshair" : "cursor-grab"}`}
 				onPointerDown={handlePointerDown}
 				onPointerMove={handlePointerMove}
 				onPointerUp={handlePointerUp}

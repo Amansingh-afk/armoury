@@ -18,7 +18,6 @@ import {
 import { Mesh as ThreeMesh } from "three";
 import type { LayerStack } from "../painting/layer-stack";
 import { type UVIndex, buildUVIndex } from "../painting/uv-lookup";
-import type { StickerState } from "../store/editor-store";
 
 interface WeaponModelProps {
 	modelPath: string;
@@ -28,30 +27,11 @@ interface WeaponModelProps {
 	textureVersion: number;
 	showWireframe: boolean;
 	hoveredFaces: number[];
-	sticker: StickerState | null;
-	stickerPreviewRef: React.MutableRefObject<{ x: number; y: number } | null>;
 	onUVEdgesReady?: (edges: Array<[number, number, number, number]>) => void;
 	onUVIndexReady?: (index: UVIndex) => void;
 }
 
 let textureDirty = false;
-let lastPreviewPos: { x: number; y: number } | null = null;
-let lastPreviewSticker: StickerState | null = null;
-
-function drawStickerOnCanvas(
-	ctx: CanvasRenderingContext2D,
-	sticker: StickerState,
-	pos: { x: number; y: number },
-) {
-	const sw = sticker.image.width * sticker.scale;
-	const sh = sticker.image.height * sticker.scale;
-	ctx.save();
-	ctx.globalAlpha = 0.85;
-	ctx.translate(pos.x, pos.y);
-	ctx.rotate(sticker.rotation);
-	ctx.drawImage(sticker.image, -sw / 2, -sh / 2, sw, sh);
-	ctx.restore();
-}
 
 export function WeaponModel({
 	modelPath,
@@ -61,8 +41,6 @@ export function WeaponModel({
 	textureVersion,
 	showWireframe,
 	hoveredFaces,
-	sticker,
-	stickerPreviewRef,
 	onUVEdgesReady,
 	onUVIndexReady,
 }: WeaponModelProps) {
@@ -175,67 +153,20 @@ export function WeaponModel({
 		};
 	}, [scene, roughness, metallic, ready]);
 
-	// Fast texture sync every frame + lightweight sticker preview
 	useFrame(() => {
-		if (!canvasRef.current || !textureRef.current) return;
+		if (!canvasRef.current || !textureRef.current || !textureDirty) return;
+		textureDirty = false;
 
 		const ctx = canvasRef.current.getContext("2d")!;
-		const previewPos = stickerPreviewRef.current;
-
-		if (textureDirty) {
-			textureDirty = false;
-			const composited = layerStack.composite();
-			ctx.putImageData(composited, 0, 0);
-
-			if (previewPos && sticker) {
-				drawStickerOnCanvas(ctx, sticker, previewPos);
-			}
-
-			textureRef.current.needsUpdate = true;
-			lastPreviewPos = previewPos ? { x: previewPos.x, y: previewPos.y } : null;
-			lastPreviewSticker = sticker;
-			return;
-		}
-
-		const posChanged =
-			previewPos?.x !== lastPreviewPos?.x ||
-			previewPos?.y !== lastPreviewPos?.y;
-		const stickerChanged = sticker !== lastPreviewSticker;
-
-		if (posChanged || stickerChanged) {
-			const cached = layerStack.getCachedComposite();
-			if (!cached) return;
-
-			ctx.putImageData(cached, 0, 0);
-
-			if (previewPos && sticker) {
-				drawStickerOnCanvas(ctx, sticker, previewPos);
-			}
-
-			textureRef.current.needsUpdate = true;
-			lastPreviewPos = previewPos ? { x: previewPos.x, y: previewPos.y } : null;
-			lastPreviewSticker = sticker;
-		}
+		const composited = layerStack.composite();
+		ctx.putImageData(composited, 0, 0);
+		textureRef.current.needsUpdate = true;
 	});
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: textureVersion change must trigger dirty flag
 	useEffect(() => {
 		textureDirty = true;
 	}, [textureVersion]);
-
-	// Restore clean composite when sticker is cleared
-	useEffect(() => {
-		if (sticker) return;
-		if (!canvasRef.current || !textureRef.current) return;
-		const cached = layerStack.getCachedComposite();
-		if (!cached) return;
-
-		const ctx = canvasRef.current.getContext("2d")!;
-		ctx.putImageData(cached, 0, 0);
-		textureRef.current.needsUpdate = true;
-		lastPreviewPos = null;
-		lastPreviewSticker = null;
-	}, [sticker, layerStack]);
 
 	// Wireframe overlay
 	useEffect(() => {

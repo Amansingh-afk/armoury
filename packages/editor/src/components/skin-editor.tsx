@@ -12,20 +12,29 @@ import { ExportBar } from "./export-bar";
 import { LayersPanel } from "./layers-panel";
 import { StylePanel } from "./style-panel";
 import { TexturePaintView } from "./texture-paint-view";
-import { Toolbar } from "./toolbar";
+import { Toolbar, type WeaponPickerOption } from "./toolbar";
 import { Viewport } from "./viewport";
 import { WeaponModel } from "./weapon-model";
+
+export type { WeaponPickerOption };
 
 export interface SkinEditorProps {
 	modelPath: string;
 	hdriPath?: string;
 	textureSize?: number;
+	/** When set with onWeaponChange, shows a weapon dropdown at the left of the toolbar */
+	weaponOptions?: WeaponPickerOption[];
+	selectedWeaponId?: string;
+	onWeaponChange?: (id: string) => void;
 }
 
 export function SkinEditor({
 	modelPath,
 	hdriPath,
 	textureSize = DEFAULT_TEXTURE_SIZE,
+	weaponOptions,
+	selectedWeaponId,
+	onWeaponChange,
 }: SkinEditorProps) {
 	const storeRef = useRef(createEditorStore(textureSize, textureSize));
 	const store = storeRef.current;
@@ -44,14 +53,12 @@ export function SkinEditor({
 	const activeTool = useStore(store, (s) => s.activeTool);
 	const brush = useStore(store, (s) => s.brush);
 	const uvEdges = useStore(store, (s) => s.uvEdges);
-	const sticker = useStore(store, (s) => s.sticker);
 	const uvIndex = useStore(store, (s) => s.uvIndex);
 	const hoveredFaces = useStore(store, (s) => s.hoveredFaces);
 
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [showWireframe, setShowWireframe] = useState(true);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const stickerPreviewRef = useRef<{ x: number; y: number } | null>(null);
 
 	const activeLayer = layerStack.layers.find((l) => l.id === activeLayerId);
 
@@ -160,9 +167,26 @@ export function SkinEditor({
 		[store],
 	);
 
+	const getActivePlaceTransform = useCallback(() => {
+		const state = store.getState();
+		const layer = state.layerStack.layers.find((l) => l.id === state.activeLayerId);
+		if (!layer?.isImageLayer || layer.imageTransform.fillMode !== "place") return null;
+		return { layerId: layer.id, transform: { ...layer.imageTransform } };
+	}, [store]);
+
+	const handleImageTransformChange = useCallback(
+		(layerId: number, partial: Partial<import("../painting/layer").ImageTransform>) => {
+			store.getState().setImageTransform(layerId, partial);
+		},
+		[store],
+	);
+
 	useKeyboardShortcuts({
 		onUndo: () => store.getState().undo(),
 		onRedo: () => store.getState().redo(),
+		onEscape: () => store.getState().setTool("pan"),
+		getActivePlaceTransform,
+		onImageTransformChange: handleImageTransformChange,
 	});
 
 	const show3D = viewMode === "3d" || viewMode === "split";
@@ -171,11 +195,17 @@ export function SkinEditor({
 	return (
 		<div className="flex h-screen w-screen flex-col bg-zinc-950">
 			<Toolbar
+				weaponPicker={
+					weaponOptions && weaponOptions.length > 0 && selectedWeaponId && onWeaponChange
+						? { options: weaponOptions, selectedId: selectedWeaponId, onSelect: onWeaponChange }
+						: undefined
+				}
 				onUndo={() => store.getState().undo()}
 				onRedo={() => store.getState().redo()}
 				canUndo={undoStack.length > 0}
 				canRedo={redoStack.length > 0}
 				onImportImage={handleImportClick}
+				onImportSticker={(file) => store.getState().importSticker(file)}
 				showWireframe={showWireframe}
 				onToggleWireframe={() => setShowWireframe((v) => !v)}
 				viewMode={viewMode}
@@ -184,11 +214,6 @@ export function SkinEditor({
 				onSetTool={(tool) => store.getState().setTool(tool)}
 				brush={brush}
 				onBrushChange={(partial) => store.getState().setBrush(partial)}
-				sticker={sticker}
-				onLoadSticker={(file) => store.getState().loadSticker(file)}
-				onStickerScaleChange={(s) => store.getState().setStickerScale(s)}
-				onStickerRotationChange={(r) => store.getState().setStickerRotation(r)}
-				onClearSticker={() => store.getState().clearSticker()}
 			/>
 			<div className="flex flex-1 overflow-hidden">
 				<LayersPanel
@@ -225,8 +250,6 @@ export function SkinEditor({
 										textureVersion={textureVersion}
 										showWireframe={showWireframe}
 										hoveredFaces={hoveredFaces}
-										sticker={sticker}
-										stickerPreviewRef={stickerPreviewRef}
 										onUVEdgesReady={handleUVEdgesReady}
 										onUVIndexReady={handleUVIndexReady}
 									/>
@@ -244,14 +267,11 @@ export function SkinEditor({
 								activeLayerId={activeLayerId}
 								uvEdges={uvEdges}
 								showWireframe={showWireframe}
-								sticker={sticker}
 								uvIndex={uvIndex}
 								hoveredFaces={hoveredFaces}
 								onPushUndo={handlePushUndo}
 								onBumpTexture={handleBumpTexture}
-								onPlaceSticker={(x, y) => store.getState().placeSticker(x, y)}
 								onHoveredFacesChange={(faces) => store.getState().setHoveredFaces(faces)}
-								stickerPreviewRef={stickerPreviewRef}
 							/>
 						</div>
 					)}

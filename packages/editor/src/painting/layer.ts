@@ -18,16 +18,36 @@ export interface ColorAdjust {
 
 export const DEFAULT_COLOR_ADJUST: ColorAdjust = { hue: 0, saturation: 0, brightness: 0 };
 
-export type ImageFillMode = "stretch" | "tile";
+export type ImageFillMode = "stretch" | "tile" | "place";
 
 export interface ImageTransform {
 	scale: number;
 	fillMode: ImageFillMode;
+	x: number;
+	y: number;
+	rotation: number;
+	flipX: boolean;
+	flipY: boolean;
 }
 
 export const DEFAULT_IMAGE_TRANSFORM: ImageTransform = {
 	scale: 1,
 	fillMode: "stretch",
+	x: 0.5,
+	y: 0.5,
+	rotation: 0,
+	flipX: false,
+	flipY: false,
+};
+
+export const STICKER_IMAGE_TRANSFORM: ImageTransform = {
+	scale: 0.2,
+	fillMode: "place",
+	x: 0.5,
+	y: 0.5,
+	rotation: 0,
+	flipX: false,
+	flipY: false,
 };
 
 export class Layer {
@@ -58,9 +78,9 @@ export class Layer {
 		return this.image !== null;
 	}
 
-	setImage(img: ImageBitmap): void {
+	setImage(img: ImageBitmap, transform?: ImageTransform): void {
 		this.image = img;
-		this.imageTransform = { ...DEFAULT_IMAGE_TRANSFORM };
+		this.imageTransform = transform ? { ...transform } : { ...DEFAULT_IMAGE_TRANSFORM };
 	}
 
 	renderImage(): void {
@@ -86,6 +106,22 @@ export class Layer {
 						ctx.drawImage(this.image, x, y, tileW, tileH);
 					}
 				}
+				break;
+			}
+
+			case "place": {
+				const aspect = this.image.height / this.image.width;
+				const sw = w * t.scale;
+				const sh = sw * aspect;
+				const cx = t.x * w;
+				const cy = t.y * h;
+
+				ctx.save();
+				ctx.translate(cx, cy);
+				ctx.rotate(t.rotation);
+				ctx.scale(t.flipX ? -1 : 1, t.flipY ? -1 : 1);
+				ctx.drawImage(this.image, -sw / 2, -sh / 2, sw, sh);
+				ctx.restore();
 				break;
 			}
 		}

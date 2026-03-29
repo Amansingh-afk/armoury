@@ -120,40 +120,61 @@ export function StylePanel({
 
 	return (
 		<div className="flex w-56 flex-col gap-3 overflow-y-auto border-l border-zinc-800 bg-zinc-900 p-3">
-			{isImageLayer && imageTransform ? (
-				<>
-					{/* Fill Mode */}
-					<div>
-						<label className="mb-1.5 block text-xs font-medium text-zinc-400">Fill Mode</label>
-						<div className="grid grid-cols-2 gap-1">
-							{(["stretch", "tile"] as ImageFillMode[]).map((mode) => (
-								<button
-									key={mode}
-									type="button"
-									onClick={() => onImageTransformChange({ fillMode: mode })}
-									className={`rounded px-2 py-1.5 text-xs capitalize transition-colors ${
-										imageTransform.fillMode === mode
-											? "bg-blue-600 text-white"
-											: "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-									}`}
-								>
-									{mode === "stretch" ? "Fill UV" : "Tile"}
-								</button>
-							))}
-						</div>
+		{isImageLayer && imageTransform ? (
+			<>
+				{/* Fill Mode */}
+				<div>
+					<label className="mb-1.5 block text-xs font-medium text-zinc-400">Fill Mode</label>
+					<div className="grid grid-cols-3 gap-1">
+						{(["stretch", "tile", "place"] as ImageFillMode[]).map((mode) => (
+							<button
+								key={mode}
+								type="button"
+								onClick={() => onImageTransformChange({ fillMode: mode })}
+								className={`rounded px-2 py-1.5 text-xs transition-colors ${
+									imageTransform.fillMode === mode
+										? "bg-blue-600 text-white"
+										: "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+								}`}
+							>
+								{mode === "stretch" ? "Fill UV" : mode === "tile" ? "Tile" : "Sticker"}
+							</button>
+						))}
 					</div>
+				</div>
 
-					{/* Scale (tile mode) */}
-					{imageTransform.fillMode === "tile" && (
+				{/* Scale (tile mode) */}
+				{imageTransform.fillMode === "tile" && (
+					<div>
+						<label className="mb-0.5 block text-[10px] text-zinc-500">
+							Scale: {imageTransform.scale.toFixed(2)}
+						</label>
+						<input
+							type="range"
+							min={0.05}
+							max={5}
+							step={0.01}
+							value={imageTransform.scale}
+							onChange={(e) =>
+								onImageTransformChange({ scale: Number.parseFloat(e.target.value) })
+							}
+							className="w-full"
+						/>
+					</div>
+				)}
+
+				{/* Sticker controls (place mode) */}
+				{imageTransform.fillMode === "place" && (
+					<>
 						<div>
 							<label className="mb-0.5 block text-[10px] text-zinc-500">
-								Scale: {imageTransform.scale.toFixed(2)}
+								Size: {Math.round(imageTransform.scale * 100)}%
 							</label>
 							<input
 								type="range"
-								min={0.05}
-								max={5}
-								step={0.01}
+								min={0.02}
+								max={0.8}
+								step={0.005}
 								value={imageTransform.scale}
 								onChange={(e) =>
 									onImageTransformChange({ scale: Number.parseFloat(e.target.value) })
@@ -161,19 +182,94 @@ export function StylePanel({
 								className="w-full"
 							/>
 						</div>
-					)}
+						<div>
+							<label className="mb-0.5 block text-[10px] text-zinc-500">
+								X: {Math.round(imageTransform.x * 100)}%
+							</label>
+							<input
+								type="range"
+								min={0}
+								max={1}
+								step={0.005}
+								value={imageTransform.x}
+								onChange={(e) =>
+									onImageTransformChange({ x: Number.parseFloat(e.target.value) })
+								}
+								className="w-full"
+							/>
+						</div>
+						<div>
+							<label className="mb-0.5 block text-[10px] text-zinc-500">
+								Y: {Math.round(imageTransform.y * 100)}%
+							</label>
+							<input
+								type="range"
+								min={0}
+								max={1}
+								step={0.005}
+								value={imageTransform.y}
+								onChange={(e) =>
+									onImageTransformChange({ y: Number.parseFloat(e.target.value) })
+								}
+								className="w-full"
+							/>
+						</div>
+						<div>
+							<label className="mb-0.5 block text-[10px] text-zinc-500">
+								Rotation: {Math.round(imageTransform.rotation * (180 / Math.PI))}°
+							</label>
+							<input
+								type="range"
+								min={-3.14159}
+								max={3.14159}
+								step={0.01}
+								value={imageTransform.rotation}
+								onChange={(e) =>
+									onImageTransformChange({ rotation: Number.parseFloat(e.target.value) })
+								}
+								className="w-full"
+							/>
+						</div>
+						<div className="flex gap-1">
+							<button
+								type="button"
+								onClick={() => onImageTransformChange({ flipX: !imageTransform.flipX })}
+								className={`flex-1 rounded px-2 py-1.5 text-xs transition-colors ${
+									imageTransform.flipX
+										? "bg-orange-600 text-white"
+										: "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+								}`}
+							>
+								Flip H
+							</button>
+							<button
+								type="button"
+								onClick={() => onImageTransformChange({ flipY: !imageTransform.flipY })}
+								className={`flex-1 rounded px-2 py-1.5 text-xs transition-colors ${
+									imageTransform.flipY
+										? "bg-orange-600 text-white"
+										: "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+								}`}
+							>
+								Flip V
+							</button>
+						</div>
+					</>
+				)}
 
-					{/* Instructions */}
-					<div className="border-t border-zinc-800 pt-2">
-						<p className="text-xs text-zinc-600 leading-relaxed">
-							{imageTransform.fillMode === "stretch" &&
-								"Image stretched to fill the UV texture."}
-							{imageTransform.fillMode === "tile" &&
-								"Image repeats across the UV texture. Adjust scale to change tile size."}
-						</p>
-					</div>
-				</>
-			) : (
+				{/* Instructions */}
+				<div className="border-t border-zinc-800 pt-2">
+					<p className="text-xs text-zinc-600 leading-relaxed">
+						{imageTransform.fillMode === "stretch" &&
+							"Image stretched to fill the UV texture."}
+						{imageTransform.fillMode === "tile" &&
+							"Image repeats across the UV texture. Adjust scale to change tile size."}
+						{imageTransform.fillMode === "place" &&
+							"Sticker placed on texture. Adjust position, size, rotation, and flip. Use scroll wheel to resize, Shift+scroll to rotate."}
+					</p>
+				</div>
+			</>
+		) : (
 				<>
 					{/* Pattern Selection */}
 					<div>

@@ -64,8 +64,8 @@ pnpm lint:fix # Biome + auto-fix
 
 **Export**
 
-- **TGA** (CS2 Workshop-friendly) and **PNG**
-- **Seam dilation** around UV islands so filters don’t leave gaps
+- **TGA** with alpha paint coverage mask (CS2 Workshop-ready) and **PNG**
+- **Seam dilation** (16px) around UV islands so filters don’t leave gaps
 
 Default working resolution is **2048×2048** unless you pass a different `textureSize` into `SkinEditor`.
 
@@ -116,13 +116,11 @@ scripts/           GLB pipeline — read scripts/README.md
 
 ---
 
-## New weapon model
+## Weapon models
 
-1. Produce a **geometry-focused `.glb`** (see **`scripts/README.md`**: `optimize-glb.mjs` and/or Blender `convert-model.py`).
-2. Put it in **`apps/web/public/models/`**.
-3. Register it in **`apps/web/app/editor/page.tsx`** (`WEAPONS` array: `id`, `label`, `path`).
+All 35 CS2 weapons are included, sourced from [Valve’s official workshop resources](https://www.counter-strike.net/workshop/workshopresources) with exact UV layouts for Workshop compatibility. See **`scripts/README.md`** for how to add more.
 
-Switching weapon in the demo **remounts** the editor, so layer work doesn’t carry across guns yet.
+Switching weapon **remounts** the editor, so layer work doesn’t carry across guns yet.
 
 ---
 
@@ -137,6 +135,26 @@ React 19, Next.js 15, TypeScript, Three.js, React Three Fiber, Drei, Zustand, Ca
 - No project **save/load** — refresh loses work unless you exported.
 - **Heavy 4K** sessions may stutter; compositing is still Canvas2D-first.
 - No per-pixel **roughness/metal** paint maps — global sliders + presets only.
+
+---
+
+## Roadmap
+
+**Up next**
+
+- [ ] Save / load projects (IndexedDB) — persist layers, settings, weapon selection across sessions
+- [ ] Eraser tool — paint to add coverage, erase to reveal bare metal (alpha=0 in export)
+- [ ] CS2 finish style presets — Custom Paint Job, Gunsmith, Hydrographic, Spray Paint, Anodized with correct material defaults
+- [ ] Workshop config export — generate `weapon_finish_config.txt` alongside TGA (`wearremapmin`, `wearremapmax`, `style`, `pattern`)
+
+**Planned**
+
+- [ ] Texture resolution picker (1024 / 2048 / 4096)
+- [ ] Layer lock toggle — prevent accidental edits
+- [ ] Color palette / saved swatches
+- [ ] Flip / mirror image layers
+- [ ] Loading indicator for weapon switching
+- [ ] Mobile device warning
 
 ---
 

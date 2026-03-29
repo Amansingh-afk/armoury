@@ -142,18 +142,26 @@ React 19, Next.js 15, TypeScript, Three.js, React Three Fiber, Drei, Zustand, Ca
 
 **Up next**
 
+- [ ] Per-pixel roughness map painting — separate layer stack for roughness so different parts of the gun have different material finish (glossy logo on matte body, chrome accents on rubberized grip)
+- [ ] Normal map painting — paint height/depth to generate normal maps for engraved text, raised patterns, surface scratches
 - [ ] Save / load projects (IndexedDB) — persist layers, settings, weapon selection across sessions
 - [ ] Eraser tool — paint to add coverage, erase to reveal bare metal (alpha=0 in export)
+
+**Workshop-ready**
+
 - [ ] CS2 finish style presets — Custom Paint Job, Gunsmith, Hydrographic, Spray Paint, Anodized with correct material defaults
 - [ ] Workshop config export — generate `weapon_finish_config.txt` alongside TGA (`wearremapmin`, `wearremapmax`, `style`, `pattern`)
+- [ ] Text tool — add typography with font selection, size, color, outline directly on the texture
+- [ ] Selection tools — rectangular marquee, freeform lasso, magic wand for isolating regions
+- [ ] Gradient tool — linear and radial gradients for color transitions and depth
 
 **Planned**
 
 - [ ] Texture resolution picker (1024 / 2048 / 4096)
+- [ ] Advanced brush — custom brush shapes, smudge, blur, sharpen
 - [ ] Layer lock toggle — prevent accidental edits
 - [ ] Color palette / saved swatches
 - [ ] Flip / mirror image layers
-- [ ] Loading indicator for weapon switching
 - [ ] Mobile device warning
 
 ---

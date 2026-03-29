@@ -142,3 +142,59 @@
 .delay-800 {
 	animation-delay: 0.8s;
 }
+
+/* ── Landing section atmospheres ── */
+.section-preview-bg {
+	background: radial-gradient(
+			ellipse 100% 80% at 50% -20%,
+			rgba(59, 130, 246, 0.07),
+			transparent 50%
+		), radial-gradient(ellipse 60% 40% at 100% 50%, rgba(168, 85, 247, 0.04), transparent 45%),
+		linear-gradient(180deg, rgb(9 9 11) 0%, rgb(24 24 27 / 0.85) 50%, rgb(9 9 11) 100%);
+}
+
+.section-features-bg {
+	background: radial-gradient(ellipse 70% 50% at 0% 30%, rgba(34, 197, 94, 0.04), transparent 50%),
+		radial-gradient(ellipse 50% 40% at 100% 70%, rgba(59, 130, 246, 0.05), transparent 45%),
+		linear-gradient(180deg, rgb(9 9 11), rgb(24 24 27 / 0.35), rgb(9 9 11));
+}
+
+.section-workflow-bg {
+	background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(234, 179, 8, 0.05), transparent 55%),
+		linear-gradient(180deg, rgb(9 9 11), rgb(39 39 42 / 0.25));
+}
+
+.section-cta-bg {
+	background: radial-gradient(ellipse 90% 70% at 50% 80%, rgba(37, 99, 235, 0.12), transparent 55%),
+		linear-gradient(180deg, rgb(9 9 11), rgb(24 24 27 / 0.9));
+}
+
+/* ── Footer flair ── */
+@keyframes footer-wiggle {
+	0%,
+	100% {
+		transform: rotate(-0.8deg);
+	}
+	50% {
+		transform: rotate(0.8deg);
+	}
+}
+
+.footer-funky {
+	display: inline-block;
+	animation: footer-wiggle 5s ease-in-out infinite;
+}
+
+@keyframes footer-hue {
+	0%,
+	100% {
+		filter: hue-rotate(0deg);
+	}
+	50% {
+		filter: hue-rotate(25deg);
+	}
+}
+
+.footer-heart-glow {
+	animation: footer-hue 8s ease-in-out infinite;
+}

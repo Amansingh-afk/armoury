@@ -2,6 +2,65 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { PreviewShowcase } from "./preview-showcase";
 
+function TopNav() {
+	return (
+		<header className="fixed top-0 right-0 left-0 z-50 border-b border-zinc-800/60 bg-zinc-950/75 backdrop-blur-md">
+			<div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+				<Link
+					href="/"
+					className="font-semibold tracking-tight text-zinc-100 transition-colors hover:text-white"
+				>
+					<span className="bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
+						Armoury
+					</span>
+				</Link>
+				<nav
+					className="flex items-center gap-1 text-xs font-medium sm:gap-2 sm:text-sm"
+					aria-label="Primary"
+				>
+					<a
+						href="#preview"
+						className="hidden rounded-md px-2 py-1.5 text-zinc-500 transition-colors hover:bg-zinc-800/50 hover:text-zinc-200 sm:inline"
+					>
+						Showcase
+					</a>
+					<a
+						href="#features"
+						className="hidden rounded-md px-2 py-1.5 text-zinc-500 transition-colors hover:bg-zinc-800/50 hover:text-zinc-200 md:inline"
+					>
+						Features
+					</a>
+					<a
+						href="#workflow"
+						className="hidden rounded-md px-2 py-1.5 text-zinc-500 transition-colors hover:bg-zinc-800/50 hover:text-zinc-200 lg:inline"
+					>
+						Flow
+					</a>
+					<Link
+						href="/editor"
+						className="rounded-md bg-blue-600 px-3 py-1.5 text-white shadow-sm shadow-blue-600/20 transition-colors hover:bg-blue-500"
+					>
+						Editor
+					</Link>
+					<a
+						href="https://github.com"
+						target="_blank"
+						rel="noopener noreferrer"
+						aria-label="GitHub repository"
+						className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/50 px-2.5 py-1.5 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+					>
+						<svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+							<title>GitHub</title>
+							<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+						</svg>
+						<span className="hidden sm:inline">GitHub</span>
+					</a>
+				</nav>
+			</div>
+		</header>
+	);
+}
+
 function GridBackground() {
 	return (
 		<div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -24,7 +83,7 @@ function GridBackground() {
 
 function HeroSection() {
 	return (
-		<section className="relative flex min-h-[100dvh] flex-col items-center justify-center px-6 py-24">
+		<section className="relative flex min-h-[100dvh] flex-col items-center justify-center px-6 pt-20 pb-24">
 			<GridBackground />
 
 			<div className="relative z-10 flex max-w-4xl flex-col items-center text-center">
@@ -44,8 +103,8 @@ function HeroSection() {
 				{/* Subtitle */}
 				<p className="animate-fade-in-up delay-200 mt-6 max-w-2xl text-lg text-zinc-400 sm:text-xl leading-relaxed">
 					Layer patterns, images, and stickers onto weapon models —{" "}
-					<span className="text-zinc-200">directly in your browser</span>. Real-time PBR
-					preview, procedural wear, Workshop-ready export.
+					<span className="text-zinc-200">directly in your browser</span>. Real-time PBR preview,
+					procedural wear, Workshop-ready export.
 				</p>
 
 				{/* CTA group */}
@@ -62,6 +121,7 @@ function HeroSection() {
 							stroke="currentColor"
 							strokeWidth={2}
 						>
+							<title>Continue</title>
 							<path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
 						</svg>
 					</Link>
@@ -72,6 +132,7 @@ function HeroSection() {
 						className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-6 py-3.5 text-sm font-medium text-zinc-300 backdrop-blur-sm transition-all hover:border-zinc-700 hover:bg-zinc-800/50 hover:text-zinc-100"
 					>
 						<svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+							<title>GitHub</title>
 							<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
 						</svg>
 						GitHub
@@ -90,7 +151,10 @@ function HeroSection() {
 
 function PreviewSection() {
 	return (
-		<section className="relative px-6 py-32">
+		<section
+			id="preview"
+			className="section-preview-bg relative scroll-mt-16 border-y border-zinc-800/40 px-6 py-32"
+		>
 			<div className="mx-auto max-w-6xl">
 				<div className="text-center mb-16">
 					<h2 className="text-3xl font-bold tracking-tight sm:text-5xl bg-gradient-to-b from-zinc-100 to-zinc-500 bg-clip-text text-transparent">
@@ -120,7 +184,14 @@ function PreviewSection() {
 const FEATURES = [
 	{
 		icon: (
-			<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+			<svg
+				className="h-5 w-5"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				strokeWidth={1.5}
+			>
+				<title>Layer stack</title>
 				<path
 					strokeLinecap="round"
 					strokeLinejoin="round"
@@ -133,7 +204,14 @@ const FEATURES = [
 	},
 	{
 		icon: (
-			<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+			<svg
+				className="h-5 w-5"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				strokeWidth={1.5}
+			>
+				<title>Procedural fills</title>
 				<path
 					strokeLinecap="round"
 					strokeLinejoin="round"
@@ -141,12 +219,19 @@ const FEATURES = [
 				/>
 			</svg>
 		),
-		title: "12 Procedural Fills",
+		title: "Procedural fills",
 		desc: "Camo, carbon fiber, damascus steel, marble, wood grain, geometric — generate patterns with your color choices.",
 	},
 	{
 		icon: (
-			<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+			<svg
+				className="h-5 w-5"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				strokeWidth={1.5}
+			>
+				<title>PBR preview</title>
 				<path
 					strokeLinecap="round"
 					strokeLinejoin="round"
@@ -159,7 +244,14 @@ const FEATURES = [
 	},
 	{
 		icon: (
-			<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+			<svg
+				className="h-5 w-5"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				strokeWidth={1.5}
+			>
+				<title>Wear simulation</title>
 				<path
 					strokeLinecap="round"
 					strokeLinejoin="round"
@@ -177,12 +269,15 @@ const FEATURES = [
 	},
 	{
 		icon: (
-			<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-				<path
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"
-				/>
+			<svg
+				className="h-5 w-5"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				strokeWidth={1.5}
+			>
+				<title>Stickers</title>
+				<path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
 				<path
 					strokeLinecap="round"
 					strokeLinejoin="round"
@@ -195,7 +290,14 @@ const FEATURES = [
 	},
 	{
 		icon: (
-			<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+			<svg
+				className="h-5 w-5"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				strokeWidth={1.5}
+			>
+				<title>Export</title>
 				<path
 					strokeLinecap="round"
 					strokeLinejoin="round"
@@ -210,10 +312,7 @@ const FEATURES = [
 
 function FeaturesSection() {
 	return (
-		<section className="relative px-6 py-32">
-			{/* Divider glow */}
-			<div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-2/3 bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
-
+		<section id="features" className="section-features-bg relative scroll-mt-16 px-6 py-32">
 			<div className="mx-auto max-w-6xl">
 				<div className="text-center mb-16">
 					<h2 className="text-3xl font-bold tracking-tight sm:text-5xl bg-gradient-to-b from-zinc-100 to-zinc-500 bg-clip-text text-transparent">
@@ -245,16 +344,26 @@ function FeaturesSection() {
 
 function WorkflowSection() {
 	const steps = [
-		{ num: "01", title: "Pick a weapon", desc: "Start with the AK-47. More weapons coming soon." },
-		{ num: "02", title: "Stack layers", desc: "Fill with patterns, import images, or place stickers." },
-		{ num: "03", title: "Tune materials", desc: "Set PBR finish — matte, glossy, chrome. Apply wear." },
+		{
+			num: "01",
+			title: "Pick a weapon",
+			desc: "AK-47, M4A4, AWP in the demo — bolt more on when you feel like it.",
+		},
+		{
+			num: "02",
+			title: "Stack layers",
+			desc: "Fill with patterns, import images, or place stickers.",
+		},
+		{
+			num: "03",
+			title: "Tune materials",
+			desc: "Set PBR finish — matte, glossy, chrome. Apply wear.",
+		},
 		{ num: "04", title: "Export", desc: "Download Workshop-ready TGA or PNG with seam dilation." },
 	];
 
 	return (
-		<section className="relative px-6 py-32">
-			<div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-2/3 bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
-
+		<section id="workflow" className="section-workflow-bg relative scroll-mt-16 px-6 py-32">
 			<div className="mx-auto max-w-4xl">
 				<div className="text-center mb-16">
 					<h2 className="text-3xl font-bold tracking-tight sm:text-5xl bg-gradient-to-b from-zinc-100 to-zinc-500 bg-clip-text text-transparent">
@@ -264,10 +373,7 @@ function WorkflowSection() {
 
 				<div className="grid gap-0">
 					{steps.map((step, i) => (
-						<div
-							key={step.num}
-							className="group relative flex items-start gap-6 py-8"
-						>
+						<div key={step.num} className="group relative flex items-start gap-6 py-8">
 							{/* Connector line */}
 							{i < steps.length - 1 && (
 								<div className="absolute left-[1.125rem] top-[4.5rem] h-[calc(100%-2.5rem)] w-px bg-gradient-to-b from-zinc-800 to-transparent" />
@@ -290,9 +396,7 @@ function WorkflowSection() {
 
 function CTASection() {
 	return (
-		<section className="relative px-6 py-32">
-			<div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-2/3 bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
-
+		<section id="cta" className="section-cta-bg relative scroll-mt-16 px-6 py-32">
 			<div className="mx-auto max-w-2xl text-center">
 				<h2 className="text-4xl font-bold tracking-tight sm:text-6xl bg-gradient-to-b from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
 					Ready to build?
@@ -313,6 +417,7 @@ function CTASection() {
 							stroke="currentColor"
 							strokeWidth={2}
 						>
+							<title>Continue</title>
 							<path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
 						</svg>
 					</Link>
@@ -324,20 +429,51 @@ function CTASection() {
 
 function Footer() {
 	return (
-		<footer className="border-t border-zinc-900 px-6 py-8">
-			<div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
-				<div className="flex items-center gap-2 text-sm text-zinc-600">
-					<span className="font-semibold text-zinc-400">Armoury</span>
-					<span>&middot;</span>
-					<span>Open source</span>
+		<footer className="border-t border-zinc-800/80 bg-zinc-950 bg-[linear-gradient(180deg,rgb(24_24_27/0.35),rgb(9_9_11))] px-6 py-10">
+			<div className="mx-auto flex max-w-6xl flex-col items-center gap-8">
+				<div className="flex w-full flex-col items-center justify-between gap-4 sm:flex-row sm:items-start">
+					<div className="text-center sm:text-left">
+						<div className="flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 sm:justify-start">
+							<span className="font-semibold text-zinc-300">Armoury</span>
+							<span className="text-zinc-700">·</span>
+							<span>open source, zero nonsense</span>
+						</div>
+					</div>
+					<div className="flex flex-wrap items-center justify-center gap-4 text-sm text-zinc-500">
+						<Link href="/editor" className="transition-colors hover:text-orange-200">
+							Editor
+						</Link>
+<a href="#preview" className="transition-colors hover:text-emerald-300/90">
+							Showcase
+						</a>
+						<a
+							href="https://github.com"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="transition-colors hover:text-zinc-200"
+						>
+							GitHub
+						</a>
+					</div>
 				</div>
-				<div className="flex items-center gap-6 text-sm text-zinc-600">
-					<Link href="/editor" className="transition-colors hover:text-zinc-300">
-						Editor
-					</Link>
-					<a href="https://github.com" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-zinc-300">
-						GitHub
-					</a>
+
+				<div className="w-full border-t border-dashed border-zinc-800/80 pt-8 text-center">
+					<p className="footer-funky mx-auto max-w-lg text-sm leading-relaxed text-zinc-500">
+						<span className="font-mono text-[10px] uppercase tracking-[0.35em] text-zinc-600">
+							crafted with questionable sleep schedules
+						</span>
+						<br />
+						<span className="footer-heart-glow mt-3 inline-block text-base font-medium tracking-tight text-zinc-300">
+							Made with{" "}
+							<span className="inline-block px-0.5" role="img" aria-label="love">
+								❤️
+							</span>{" "}
+							in India <span title="India">🇮🇳</span>
+						</span>
+						<span className="mt-2 block text-xs italic text-zinc-600">
+							chai-fuelled pixels · loud traffic · louder gradients
+						</span>
+					</p>
 				</div>
 			</div>
 		</footer>
@@ -347,6 +483,7 @@ function Footer() {
 export default function Home() {
 	return (
 		<main className="relative overflow-hidden">
+			<TopNav />
 			<HeroSection />
 			<PreviewSection />
 			<FeaturesSection />

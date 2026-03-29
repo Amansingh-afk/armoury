@@ -111,7 +111,7 @@ const PRESETS: PreviewPreset[] = [
 		wearLevel: 0.05,
 		layers: [
 			{ type: "pattern", pattern: "solid", colors: ["#0a1a0a"], opacity: 1 },
-			{ type: "image", imagePath: "/previews/supra-drift.jpg", fillMode: "stretch", opacity: 1 },
+			{ type: "image", imagePath: "/previews/supra-drift.png", fillMode: "stretch", opacity: 1 },
 		],
 	},
 ];

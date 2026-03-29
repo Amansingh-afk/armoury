@@ -9,7 +9,9 @@ import {
 	DoubleSide,
 	MeshBasicMaterial,
 	MeshPhysicalMaterial,
+	Raycaster,
 	SRGBColorSpace,
+	Vector2,
 	Vector3,
 	WireframeGeometry,
 	LineSegments,
@@ -18,6 +20,14 @@ import {
 import { Mesh as ThreeMesh } from "three";
 import type { LayerStack } from "../painting/layer-stack";
 import { type UVIndex, buildUVIndex } from "../painting/uv-lookup";
+
+export interface StickerPreview {
+	image: ImageBitmap;
+	scale: number;
+	rotation: number;
+	flipX: boolean;
+	flipY: boolean;
+}
 
 interface WeaponModelProps {
 	modelPath: string;
@@ -29,9 +39,14 @@ interface WeaponModelProps {
 	hoveredFaces: number[];
 	onUVEdgesReady?: (edges: Array<[number, number, number, number]>) => void;
 	onUVIndexReady?: (index: UVIndex) => void;
+	stickerPreview?: StickerPreview | null;
+	onStickerPlace?: (uvX: number, uvY: number) => void;
 }
 
 let textureDirty = false;
+
+const raycaster = new Raycaster();
+const pointer = new Vector2();
 
 export function WeaponModel({
 	modelPath,
@@ -43,14 +58,19 @@ export function WeaponModel({
 	hoveredFaces,
 	onUVEdgesReady,
 	onUVIndexReady,
+	stickerPreview,
+	onStickerPlace,
 }: WeaponModelProps) {
 	const { scene } = useGLTF(modelPath);
 	const { camera } = useThree();
 	const controls = useThree((s) => s.controls);
+	const gl = useThree((s) => s.gl);
 
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const textureRef = useRef<CanvasTexture | null>(null);
 	const materialRef = useRef<MeshPhysicalMaterial | null>(null);
+	const stickerUVRef = useRef<{ x: number; y: number } | null>(null);
+	const lastPreviewUV = useRef<{ x: number; y: number } | null>(null);
 	const [ready, setReady] = useState(false);
 
 	// Auto-fit camera
@@ -154,12 +174,50 @@ export function WeaponModel({
 	}, [scene, roughness, metallic, ready]);
 
 	useFrame(() => {
-		if (!canvasRef.current || !textureRef.current || !textureDirty) return;
-		textureDirty = false;
+		if (!canvasRef.current || !textureRef.current) return;
+
+		const previewUV = stickerUVRef.current;
+		const prevUV = lastPreviewUV.current;
+		const hasPreviewChange = stickerPreview && (
+			(previewUV?.x !== prevUV?.x || previewUV?.y !== prevUV?.y) ||
+			(!previewUV && prevUV) || (previewUV && !prevUV)
+		);
+
+		if (!textureDirty && !hasPreviewChange) return;
 
 		const ctx = canvasRef.current.getContext("2d")!;
-		const composited = layerStack.composite();
-		ctx.putImageData(composited, 0, 0);
+
+		if (textureDirty) {
+			textureDirty = false;
+			const composited = layerStack.composite();
+			ctx.putImageData(composited, 0, 0);
+		} else {
+			// Restore clean composite before drawing preview
+			const cached = layerStack.getCachedComposite();
+			if (cached) ctx.putImageData(cached, 0, 0);
+		}
+
+		// Draw sticker preview at UV position
+		if (stickerPreview && previewUV) {
+			const w = canvasRef.current.width;
+			const h = canvasRef.current.height;
+			const img = stickerPreview.image;
+			const aspect = img.height / img.width;
+			const sw = w * stickerPreview.scale;
+			const sh = sw * aspect;
+			const cx = previewUV.x * w;
+			const cy = previewUV.y * h;
+
+			ctx.save();
+			ctx.globalAlpha = 0.85;
+			ctx.translate(cx, cy);
+			ctx.rotate(stickerPreview.rotation);
+			ctx.scale(stickerPreview.flipX ? -1 : 1, stickerPreview.flipY ? -1 : 1);
+			ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
+			ctx.restore();
+		}
+
+		lastPreviewUV.current = previewUV ? { ...previewUV } : null;
 		textureRef.current.needsUpdate = true;
 	});
 
@@ -219,6 +277,76 @@ export function WeaponModel({
 			}
 		});
 	}, [scene, onUVIndexReady]);
+
+	// Raycast for 3D sticker placement
+	useEffect(() => {
+		if (!stickerPreview || !onStickerPlace) return;
+		const canvas = gl.domElement;
+
+		const getUVFromEvent = (e: PointerEvent): { x: number; y: number } | null => {
+			const rect = canvas.getBoundingClientRect();
+			pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+			pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+			raycaster.setFromCamera(pointer, camera);
+
+			const meshes: ThreeMesh[] = [];
+			scene.traverse((child) => {
+				if ("isMesh" in child && child.isMesh && !child.userData.isHighlight && !child.userData.isWireframeOverlay) {
+					meshes.push(child as ThreeMesh);
+				}
+			});
+
+			const intersects = raycaster.intersectObjects(meshes, false);
+			if (intersects.length === 0 || !intersects[0].uv) return null;
+			return { x: intersects[0].uv.x, y: intersects[0].uv.y };
+		};
+
+		let pointerDownPos: { x: number; y: number } | null = null;
+
+		const handleDown = (e: PointerEvent) => {
+			if (e.button === 0) pointerDownPos = { x: e.clientX, y: e.clientY };
+		};
+
+		const handleMove = (e: PointerEvent) => {
+			const uv = getUVFromEvent(e);
+			stickerUVRef.current = uv;
+			if (uv) {
+				textureDirty = true;
+			}
+		};
+
+		const handleUp = (e: PointerEvent) => {
+			if (e.button !== 0 || !pointerDownPos) return;
+			// Only place if pointer barely moved (not a drag/orbit)
+			const dx = e.clientX - pointerDownPos.x;
+			const dy = e.clientY - pointerDownPos.y;
+			if (dx * dx + dy * dy < 25) {
+				const uv = stickerUVRef.current;
+				if (uv) onStickerPlace(uv.x, uv.y);
+			}
+			pointerDownPos = null;
+		};
+
+		const handleLeave = () => {
+			pointerDownPos = null;
+			stickerUVRef.current = null;
+			textureDirty = true;
+		};
+
+		canvas.addEventListener("pointerdown", handleDown);
+		canvas.addEventListener("pointermove", handleMove);
+		canvas.addEventListener("pointerup", handleUp);
+		canvas.addEventListener("pointerleave", handleLeave);
+
+		return () => {
+			canvas.removeEventListener("pointerdown", handleDown);
+			canvas.removeEventListener("pointermove", handleMove);
+			canvas.removeEventListener("pointerup", handleUp);
+			canvas.removeEventListener("pointerleave", handleLeave);
+			stickerUVRef.current = null;
+			lastPreviewUV.current = null;
+		};
+	}, [stickerPreview, onStickerPlace, gl, camera, scene]);
 
 	// Highlight overlay for hovered faces
 	const highlightRef = useRef<{

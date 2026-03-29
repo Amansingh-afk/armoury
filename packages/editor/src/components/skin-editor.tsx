@@ -16,6 +16,7 @@ import { Toolbar, type WeaponPickerOption } from "./toolbar";
 import { ModelLoadingFallback } from "./viewport";
 import { ImageImportDialog, type ImageImportResult } from "./image-import-dialog";
 import { Viewport } from "./viewport";
+import type { StickerPreview } from "./weapon-model";
 import { WeaponModel } from "./weapon-model";
 
 export type { WeaponPickerOption };
@@ -64,6 +65,28 @@ export function SkinEditor({
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const activeLayer = layerStack.layers.find((l) => l.id === activeLayerId);
+
+	// Build sticker preview for 3D placement when active layer is a place-mode image
+	const stickerPreview: StickerPreview | null = (() => {
+		if (!activeLayer?.isImageLayer || !activeLayer.image) return null;
+		if (activeLayer.imageTransform.fillMode !== "place") return null;
+		return {
+			image: activeLayer.image,
+			scale: activeLayer.imageTransform.scale,
+			rotation: activeLayer.imageTransform.rotation,
+			flipX: activeLayer.imageTransform.flipX,
+			flipY: activeLayer.imageTransform.flipY,
+		};
+	})();
+
+	const handleStickerPlace = useCallback(
+		(uvX: number, uvY: number) => {
+			if (!activeLayer?.isImageLayer) return;
+			store.getState().pushUndo();
+			store.getState().setImageTransform(activeLayer.id, { x: uvX, y: uvY });
+		},
+		[store, activeLayer],
+	);
 
 	const handleImportFile = useCallback(
 		(file: File) => {
@@ -276,6 +299,8 @@ export function SkinEditor({
 										hoveredFaces={hoveredFaces}
 										onUVEdgesReady={handleUVEdgesReady}
 										onUVIndexReady={handleUVIndexReady}
+										stickerPreview={stickerPreview}
+										onStickerPlace={handleStickerPlace}
 									/>
 								</Suspense>
 							</Viewport>

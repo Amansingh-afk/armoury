@@ -116,9 +116,20 @@ const PRESETS: PreviewPreset[] = [
 	},
 ];
 
+const SHOWCASE_WEAPONS = [
+	{ id: "ak47", label: "AK-47", path: "/models/ak47.glb" },
+	{ id: "m4a4", label: "M4A4", path: "/models/m4a4.glb" },
+	{ id: "awp", label: "AWP", path: "/models/awp.glb" },
+	{ id: "deagle", label: "Deagle", path: "/models/deagle.glb" },
+	{ id: "m4a1_silencer", label: "M4A1-S", path: "/models/m4a1_silencer.glb" },
+	{ id: "usp_silencer", label: "USP-S", path: "/models/usp_silencer.glb" },
+] as const;
+
 export function PreviewShowcase() {
 	const [activeIdx, setActiveIdx] = useState(0);
+	const [weaponIdx, setWeaponIdx] = useState(0);
 	const preset = PRESETS[activeIdx];
+	const weapon = SHOWCASE_WEAPONS[weaponIdx];
 
 	return (
 		<div className="flex flex-col items-center gap-8">
@@ -144,8 +155,27 @@ export function PreviewShowcase() {
 					<p className="text-[10px] text-zinc-500">Drag to orbit</p>
 				</div>
 
+				{/* Weapon switcher */}
+				<div className="absolute top-4 right-4 z-10 flex items-center gap-1 rounded-lg bg-zinc-950/70 p-1 backdrop-blur-md border border-zinc-800/50">
+					{SHOWCASE_WEAPONS.map((w, i) => (
+						<button
+							key={w.id}
+							type="button"
+							onClick={() => setWeaponIdx(i)}
+							className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+								i === weaponIdx
+									? "bg-zinc-700/60 text-zinc-100"
+									: "text-zinc-500 hover:text-zinc-300"
+							}`}
+						>
+							{w.label}
+						</button>
+					))}
+				</div>
+
 				<ModelPreview
-					modelPath="/models/ak47.glb"
+					key={weapon.id}
+					modelPath={weapon.path}
 					preset={preset}
 					autoRotate
 				/>

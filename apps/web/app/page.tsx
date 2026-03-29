@@ -43,7 +43,7 @@ function TopNav() {
 						Editor
 					</Link>
 					<a
-						href="https://github.com"
+						href="https://github.com/Amansingh-afk/armoury"
 						target="_blank"
 						rel="noopener noreferrer"
 						aria-label="GitHub repository"
@@ -126,7 +126,7 @@ function HeroSection() {
 						</svg>
 					</Link>
 					<a
-						href="https://github.com"
+						href="https://github.com/Amansingh-afk/armoury"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-6 py-3.5 text-sm font-medium text-zinc-300 backdrop-blur-sm transition-all hover:border-zinc-700 hover:bg-zinc-800/50 hover:text-zinc-100"
@@ -431,7 +431,7 @@ function Footer() {
 	return (
 		<footer className="border-t border-zinc-800/80 bg-zinc-950 bg-[linear-gradient(180deg,rgb(24_24_27/0.35),rgb(9_9_11))] px-6 py-10">
 			<div className="mx-auto flex max-w-6xl flex-col items-center gap-8">
-				<div className="flex w-full flex-col items-center justify-between gap-4 sm:flex-row sm:items-start">
+				<div className="flex w-full flex-col items-center justify-between gap-4 sm:flex-row sm:items-center">
 					<div className="text-center sm:text-left">
 						<div className="flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 sm:justify-start">
 							<span className="font-semibold text-zinc-300">Armoury</span>
@@ -439,15 +439,22 @@ function Footer() {
 							<span>open source, zero nonsense</span>
 						</div>
 					</div>
+					<span className="footer-heart-glow text-sm font-medium tracking-tight text-zinc-400">
+						Made with{" "}
+						<span className="inline-block px-0.5" role="img" aria-label="love">
+							❤️
+						</span>{" "}
+						in India <span title="India">🇮🇳</span>
+					</span>
 					<div className="flex flex-wrap items-center justify-center gap-4 text-sm text-zinc-500">
 						<Link href="/editor" className="transition-colors hover:text-orange-200">
 							Editor
 						</Link>
-<a href="#preview" className="transition-colors hover:text-emerald-300/90">
+						<a href="#preview" className="transition-colors hover:text-emerald-300/90">
 							Showcase
 						</a>
 						<a
-							href="https://github.com"
+							href="https://github.com/Amansingh-afk/armoury"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="transition-colors hover:text-zinc-200"
@@ -455,25 +462,6 @@ function Footer() {
 							GitHub
 						</a>
 					</div>
-				</div>
-
-				<div className="w-full border-t border-dashed border-zinc-800/80 pt-8 text-center">
-					<p className="footer-funky mx-auto max-w-lg text-sm leading-relaxed text-zinc-500">
-						<span className="font-mono text-[10px] uppercase tracking-[0.35em] text-zinc-600">
-							crafted with questionable sleep schedules
-						</span>
-						<br />
-						<span className="footer-heart-glow mt-3 inline-block text-base font-medium tracking-tight text-zinc-300">
-							Made with{" "}
-							<span className="inline-block px-0.5" role="img" aria-label="love">
-								❤️
-							</span>{" "}
-							in India <span title="India">🇮🇳</span>
-						</span>
-						<span className="mt-2 block text-xs italic text-zinc-600">
-							chai-fuelled pixels · loud traffic · louder gradients
-						</span>
-					</p>
 				</div>
 			</div>
 		</footer>

@@ -58,6 +58,9 @@ export function SkinEditor({
 	const uvEdges = useStore(store, (s) => s.uvEdges);
 	const uvIndex = useStore(store, (s) => s.uvIndex);
 	const hoveredFaces = useStore(store, (s) => s.hoveredFaces);
+	const paintChannel = useStore(store, (s) => s.paintChannel);
+	const roughnessTextureVersion = useStore(store, (s) => s.roughnessTextureVersion);
+	const roughnessBrushValue = useStore(store, (s) => s.roughnessBrushValue);
 
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [showWireframe, setShowWireframe] = useState(true);
@@ -171,15 +174,15 @@ export function SkinEditor({
 	}, [layerStack, modelName]);
 
 	const handleExportRoughnessMap = useCallback(() => {
-		const canvas = new OffscreenCanvas(textureSize, textureSize);
+		const roughData = layerStack.getRoughnessImageData();
+		const dilated = dilateSeams(roughData, 16);
+		const canvas = new OffscreenCanvas(dilated.width, dilated.height);
 		const ctx = canvas.getContext("2d")!;
-		const v = Math.round(roughness * 255);
-		ctx.fillStyle = `rgb(${v},${v},${v})`;
-		ctx.fillRect(0, 0, textureSize, textureSize);
+		ctx.putImageData(dilated, 0, 0);
 		canvas.convertToBlob({ type: "image/png" }).then((blob) => {
 			downloadBlob(blob, `weapon_${modelName}_roughness.png`);
 		});
-	}, [roughness, textureSize, modelName]);
+	}, [layerStack, modelName]);
 
 	const handleExportNormalMap = useCallback(() => {
 		const canvas = new OffscreenCanvas(textureSize, textureSize);
@@ -261,6 +264,10 @@ export function SkinEditor({
 				onSetTool={(tool) => store.getState().setTool(tool)}
 				brush={brush}
 				onBrushChange={(partial) => store.getState().setBrush(partial)}
+				paintChannel={paintChannel}
+				onSetPaintChannel={(ch) => store.getState().setPaintChannel(ch)}
+				roughnessBrushValue={roughnessBrushValue}
+				onSetRoughnessBrushValue={(v) => store.getState().setRoughnessBrushValue(v)}
 			/>
 			<div className="flex flex-1 overflow-hidden">
 				<LayersPanel
@@ -294,6 +301,7 @@ export function SkinEditor({
 										layerStack={layerStack}
 										roughness={roughness}
 										metallic={metallic}
+										roughnessTextureVersion={roughnessTextureVersion}
 										textureVersion={textureVersion}
 										showWireframe={showWireframe}
 										hoveredFaces={hoveredFaces}
@@ -321,6 +329,10 @@ export function SkinEditor({
 								onPushUndo={handlePushUndo}
 								onBumpTexture={handleBumpTexture}
 								onHoveredFacesChange={(faces) => store.getState().setHoveredFaces(faces)}
+								paintChannel={paintChannel}
+								roughnessTextureVersion={roughnessTextureVersion}
+								roughnessBrushValue={roughnessBrushValue}
+								onBumpRoughnessTexture={() => store.setState((s) => ({ roughnessTextureVersion: s.roughnessTextureVersion + 1 }))}
 							/>
 						</div>
 					)}

@@ -22,6 +22,62 @@ export function stampBrush(target: TextureCanvas, x: number, y: number, brush: B
 	ctx.restore();
 }
 
+export function stampBrushGrayscale(
+	target: TextureCanvas,
+	x: number,
+	y: number,
+	brush: BrushSettings,
+	value: number,
+): void {
+	const ctx = target.getContext();
+	const radius = brush.size / 2;
+	if (radius < 0.5) return;
+
+	const v = Math.round(Math.max(0, Math.min(1, value)) * 255);
+	const color = `rgb(${v},${v},${v})`;
+
+	ctx.save();
+	ctx.globalAlpha = brush.opacity;
+
+	const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+	const hardStop = Math.max(0, Math.min(1, brush.hardness));
+	gradient.addColorStop(0, color);
+	gradient.addColorStop(hardStop, color);
+	gradient.addColorStop(1, `rgba(${v},${v},${v},0)`);
+
+	ctx.fillStyle = gradient;
+	ctx.beginPath();
+	ctx.arc(x, y, radius, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.restore();
+}
+
+export function strokeBrushGrayscale(
+	target: TextureCanvas,
+	points: Array<{ x: number; y: number }>,
+	brush: BrushSettings,
+	value: number,
+): void {
+	if (points.length === 0) return;
+	if (points.length === 1) {
+		stampBrushGrayscale(target, points[0].x, points[0].y, brush, value);
+		return;
+	}
+	const spacing = Math.max(1, brush.size * 0.25);
+	for (let i = 0; i < points.length - 1; i++) {
+		const p0 = points[i];
+		const p1 = points[i + 1];
+		const dx = p1.x - p0.x;
+		const dy = p1.y - p0.y;
+		const dist = Math.sqrt(dx * dx + dy * dy);
+		const steps = Math.max(1, Math.ceil(dist / spacing));
+		for (let s = 0; s <= steps; s++) {
+			const t = s / steps;
+			stampBrushGrayscale(target, p0.x + dx * t, p0.y + dy * t, brush, value);
+		}
+	}
+}
+
 export function strokeBrush(
 	target: TextureCanvas,
 	points: Array<{ x: number; y: number }>,

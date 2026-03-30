@@ -138,6 +138,7 @@ export class LayerStack {
 	layers: Layer[] = [];
 	private layerCount = 0;
 	private compositeCanvas: TextureCanvas;
+	roughnessCanvas: TextureCanvas;
 
 	wearLevel = 0;
 	wearBaseColor = { r: 45, g: 45, b: 48 };
@@ -155,10 +156,27 @@ export class LayerStack {
 		private height: number,
 	) {
 		this.compositeCanvas = new TextureCanvas(width, height);
+		this.roughnessCanvas = new TextureCanvas(width, height);
+		// Initialize roughness to mid-gray (0.5)
+		const rCtx = this.roughnessCanvas.getContext();
+		rCtx.fillStyle = "#808080";
+		rCtx.fillRect(0, 0, width, height);
+
 		const layer = this.addLayer();
 		const ctx = layer.textureCanvas.getContext();
 		ctx.fillStyle = "#ffffff";
 		ctx.fillRect(0, 0, width, height);
+	}
+
+	fillRoughness(value: number): void {
+		const v = Math.round(Math.max(0, Math.min(1, value)) * 255);
+		const ctx = this.roughnessCanvas.getContext();
+		ctx.fillStyle = `rgb(${v},${v},${v})`;
+		ctx.fillRect(0, 0, this.width, this.height);
+	}
+
+	getRoughnessImageData(): ImageData {
+		return this.roughnessCanvas.getImageData();
 	}
 
 	addLayer(): Layer {

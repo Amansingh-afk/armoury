@@ -1,5 +1,5 @@
 import { createStore } from "zustand/vanilla";
-import { strokeBrush } from "../painting/brush";
+import { strokeBrush, strokeBrushGrayscale } from "../painting/brush";
 import { type PatternType, fillPattern } from "../painting/fill";
 import { STICKER_IMAGE_TRANSFORM } from "../painting/layer";
 import type { BlendMode, ColorAdjust, ImageTransform } from "../painting/layer";
@@ -9,6 +9,7 @@ import type { UVIndex } from "../painting/uv-lookup";
 
 export type Tool = "pan" | "brush";
 export type ViewMode = "3d" | "2d" | "split";
+export type PaintChannel = "color" | "roughness";
 
 interface UndoEntry {
 	layerId: number;
@@ -28,6 +29,9 @@ export interface EditorState {
 	wearBaseColor: string;
 	wearSharpness: number;
 	textureVersion: number;
+	paintChannel: PaintChannel;
+	roughnessTextureVersion: number;
+	roughnessBrushValue: number;
 	viewMode: ViewMode;
 	uvEdges: Array<[number, number, number, number]>;
 	uvIndex: UVIndex | null;
@@ -64,6 +68,10 @@ export interface EditorState {
 	setUVIndex: (index: UVIndex) => void;
 	setHoveredFaces: (faces: number[]) => void;
 	paintStroke: (points: Array<{ x: number; y: number }>) => void;
+	setPaintChannel: (channel: PaintChannel) => void;
+	setRoughnessBrushValue: (value: number) => void;
+	paintRoughnessStroke: (points: Array<{ x: number; y: number }>) => void;
+	fillRoughness: (value: number) => void;
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -97,6 +105,9 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 			wearBaseColor: "#2d2d30",
 			wearSharpness: 0.25,
 			textureVersion: 0,
+			paintChannel: "color" as PaintChannel,
+			roughnessTextureVersion: 0,
+			roughnessBrushValue: 0.5,
 			viewMode: "3d",
 			uvEdges: [],
 			uvIndex: null,
@@ -317,6 +328,21 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 				if (!layer) return;
 				strokeBrush(layer.textureCanvas, points, state.brush);
 				bumpTexture();
+			},
+
+			setPaintChannel: (channel) => set({ paintChannel: channel }),
+
+			setRoughnessBrushValue: (value) => set({ roughnessBrushValue: value }),
+
+			paintRoughnessStroke: (points) => {
+				const state = get();
+				strokeBrushGrayscale(layerStack.roughnessCanvas, points, state.brush, state.roughnessBrushValue);
+				set((s) => ({ roughnessTextureVersion: s.roughnessTextureVersion + 1 }));
+			},
+
+			fillRoughness: (value) => {
+				layerStack.fillRoughness(value);
+				set((s) => ({ roughnessTextureVersion: s.roughnessTextureVersion + 1 }));
 			},
 		};
 	});

@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { stampBrush } from "../painting/brush";
+import { stampBrush, stampBrushGrayscale } from "../painting/brush";
 import type { LayerStack } from "../painting/layer-stack";
 import type { BrushSettings } from "../painting/types";
 import { type UVIndex, findIslandAtUV } from "../painting/uv-lookup";
-import type { Tool } from "../store/editor-store";
+import type { PaintChannel, Tool } from "../store/editor-store";
 
 interface TexturePaintViewProps {
 	layerStack: LayerStack;
@@ -20,6 +20,10 @@ interface TexturePaintViewProps {
 	onPushUndo: () => void;
 	onBumpTexture: () => void;
 	onHoveredFacesChange: (faces: number[]) => void;
+	paintChannel: PaintChannel;
+	roughnessTextureVersion: number;
+	roughnessBrushValue: number;
+	onBumpRoughnessTexture: () => void;
 }
 
 export function TexturePaintView({
@@ -35,6 +39,10 @@ export function TexturePaintView({
 	onPushUndo,
 	onBumpTexture,
 	onHoveredFacesChange,
+	paintChannel,
+	roughnessTextureVersion,
+	roughnessBrushValue,
+	onBumpRoughnessTexture,
 }: TexturePaintViewProps) {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -117,11 +125,16 @@ export function TexturePaintView({
 		ctx.translate(viewOffset.x, viewOffset.y);
 		ctx.scale(viewScale, viewScale);
 
-		// Draw composited texture
-		const composited = layerStack.composite();
+		// Draw composited texture or roughness map
 		const tmpCanvas = new OffscreenCanvas(texW, texH);
 		const tmpCtx = tmpCanvas.getContext("2d")!;
-		tmpCtx.putImageData(composited, 0, 0);
+		if (paintChannel === "roughness") {
+			const roughData = layerStack.getRoughnessImageData();
+			tmpCtx.putImageData(roughData, 0, 0);
+		} else {
+			const composited = layerStack.composite();
+			tmpCtx.putImageData(composited, 0, 0);
+		}
 		ctx.drawImage(tmpCanvas, 0, 0);
 
 		// UV wireframe overlay
@@ -155,7 +168,7 @@ export function TexturePaintView({
 			ctx.arc(mousePos.x, mousePos.y, r, 0, Math.PI * 2);
 			ctx.stroke();
 		}
-	}, [textureVersion, canvasSize, viewOffset, viewScale, showWireframe, mousePos, activeTool, brush.size, layerStack, texW, texH, hoveredFaces, uvIndex]);
+	}, [textureVersion, roughnessTextureVersion, paintChannel, canvasSize, viewOffset, viewScale, showWireframe, mousePos, activeTool, brush.size, layerStack, texW, texH, hoveredFaces, uvIndex]);
 
 	// Convert screen coords to texture coords
 	const screenToTex = useCallback(
@@ -193,17 +206,21 @@ export function TexturePaintView({
 				(e.target as HTMLElement).setPointerCapture(e.pointerId);
 				const tex = screenToTex(sx, sy);
 
-				onPushUndo();
-
-				const layer = layerStack.layers.find((l) => l.id === activeLayerId);
-				if (layer) {
-					stampBrush(layer.textureCanvas, tex.x, tex.y, brush);
-					onBumpTexture();
+				if (paintChannel === "roughness") {
+					stampBrushGrayscale(layerStack.roughnessCanvas, tex.x, tex.y, brush, roughnessBrushValue);
+					onBumpRoughnessTexture();
+				} else {
+					onPushUndo();
+					const layer = layerStack.layers.find((l) => l.id === activeLayerId);
+					if (layer) {
+						stampBrush(layer.textureCanvas, tex.x, tex.y, brush);
+						onBumpTexture();
+					}
 				}
 				lastPaintPosRef.current = tex;
 			}
 		},
-		[activeTool, brush, activeLayerId, layerStack, screenToTex, viewOffset, onPushUndo, onBumpTexture],
+		[activeTool, brush, activeLayerId, layerStack, screenToTex, viewOffset, onPushUndo, onBumpTexture, paintChannel, roughnessBrushValue, onBumpRoughnessTexture],
 	);
 
 	const handlePointerMove = useCallback(
@@ -224,21 +241,28 @@ export function TexturePaintView({
 
 			if (isPaintingRef.current && lastPaintPosRef.current) {
 				const tex = screenToTex(sx, sy);
-				const layer = layerStack.layers.find((l) => l.id === activeLayerId);
-				if (layer) {
-					// Interpolate between last and current position
-					const last = lastPaintPosRef.current;
-					const dx = tex.x - last.x;
-					const dy = tex.y - last.y;
-					const dist = Math.sqrt(dx * dx + dy * dy);
-					const spacing = Math.max(1, brush.size * 0.25);
-					const steps = Math.max(1, Math.ceil(dist / spacing));
+				const last = lastPaintPosRef.current;
+				const dx = tex.x - last.x;
+				const dy = tex.y - last.y;
+				const dist = Math.sqrt(dx * dx + dy * dy);
+				const spacing = Math.max(1, brush.size * 0.25);
+				const steps = Math.max(1, Math.ceil(dist / spacing));
 
+				if (paintChannel === "roughness") {
 					for (let s = 1; s <= steps; s++) {
 						const t = s / steps;
-						stampBrush(layer.textureCanvas, last.x + dx * t, last.y + dy * t, brush);
+						stampBrushGrayscale(layerStack.roughnessCanvas, last.x + dx * t, last.y + dy * t, brush, roughnessBrushValue);
 					}
-					onBumpTexture();
+					onBumpRoughnessTexture();
+				} else {
+					const layer = layerStack.layers.find((l) => l.id === activeLayerId);
+					if (layer) {
+						for (let s = 1; s <= steps; s++) {
+							const t = s / steps;
+							stampBrush(layer.textureCanvas, last.x + dx * t, last.y + dy * t, brush);
+						}
+						onBumpTexture();
+					}
 				}
 				lastPaintPosRef.current = tex;
 			}

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { BrushSettings } from "../painting/types";
-import type { Tool, ViewMode } from "../store/editor-store";
+import type { PaintChannel, Tool, ViewMode } from "../store/editor-store";
 
 export interface WeaponPickerOption {
 	id: string;
@@ -29,6 +29,10 @@ interface ToolbarProps {
 	onSetTool: (tool: Tool) => void;
 	brush: BrushSettings;
 	onBrushChange: (partial: Partial<BrushSettings>) => void;
+	paintChannel: PaintChannel;
+	onSetPaintChannel: (channel: PaintChannel) => void;
+	roughnessBrushValue: number;
+	onSetRoughnessBrushValue: (value: number) => void;
 }
 
 const VIEW_MODES: { value: ViewMode; label: string }[] = [
@@ -53,6 +57,10 @@ export function Toolbar({
 	onSetTool,
 	brush,
 	onBrushChange,
+	paintChannel,
+	onSetPaintChannel,
+	roughnessBrushValue,
+	onSetRoughnessBrushValue,
 }: ToolbarProps) {
 	const stickerInputRef = useRef<HTMLInputElement>(null);
 	const show2DTools = viewMode === "2d" || viewMode === "split";
@@ -189,14 +197,57 @@ export function Toolbar({
 						Brush
 					</button>
 
+					{/* Paint channel toggle */}
+					<div className="flex gap-0.5 ml-1">
+						<button
+							type="button"
+							onClick={() => onSetPaintChannel("color")}
+							className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${
+								paintChannel === "color"
+									? "bg-blue-600 text-white"
+									: "text-zinc-500 hover:bg-zinc-800"
+							}`}
+						>
+							Color
+						</button>
+						<button
+							type="button"
+							onClick={() => onSetPaintChannel("roughness")}
+							className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${
+								paintChannel === "roughness"
+									? "bg-amber-600 text-white"
+									: "text-zinc-500 hover:bg-zinc-800"
+							}`}
+						>
+							Roughness
+						</button>
+					</div>
+
 					{activeTool === "brush" && (
 						<div className="flex items-center gap-2 ml-1">
-							<input
-								type="color"
-								value={brush.color}
-								onChange={(e) => onBrushChange({ color: e.target.value })}
-								className="h-6 w-6 cursor-pointer rounded border border-zinc-700 bg-zinc-800"
-							/>
+							{paintChannel === "color" ? (
+								<input
+									type="color"
+									value={brush.color}
+									onChange={(e) => onBrushChange({ color: e.target.value })}
+									className="h-6 w-6 cursor-pointer rounded border border-zinc-700 bg-zinc-800"
+								/>
+							) : (
+								<>
+									<label className="text-[10px] text-zinc-500 whitespace-nowrap">
+										Val: {Math.round(roughnessBrushValue * 100)}%
+									</label>
+									<input
+										type="range"
+										min={0}
+										max={1}
+										step={0.01}
+										value={roughnessBrushValue}
+										onChange={(e) => onSetRoughnessBrushValue(Number.parseFloat(e.target.value))}
+										className="w-16 h-1"
+									/>
+								</>
+							)}
 							<label className="text-[10px] text-zinc-500 whitespace-nowrap">
 								Size: {brush.size}
 							</label>

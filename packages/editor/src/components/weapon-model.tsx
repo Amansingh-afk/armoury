@@ -34,6 +34,7 @@ interface WeaponModelProps {
 	layerStack: LayerStack;
 	roughness: number;
 	metallic: number;
+	roughnessTextureVersion: number;
 	textureVersion: number;
 	showWireframe: boolean;
 	hoveredFaces: number[];
@@ -44,6 +45,7 @@ interface WeaponModelProps {
 }
 
 let textureDirty = false;
+let roughTextureDirty = false;
 
 const raycaster = new Raycaster();
 const pointer = new Vector2();
@@ -53,6 +55,7 @@ export function WeaponModel({
 	layerStack,
 	roughness,
 	metallic,
+	roughnessTextureVersion,
 	textureVersion,
 	showWireframe,
 	hoveredFaces,
@@ -68,6 +71,8 @@ export function WeaponModel({
 
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const textureRef = useRef<CanvasTexture | null>(null);
+	const roughCanvasRef = useRef<HTMLCanvasElement | null>(null);
+	const roughTextureRef = useRef<CanvasTexture | null>(null);
 	const materialRef = useRef<MeshPhysicalMaterial | null>(null);
 	const stickerUVRef = useRef<{ x: number; y: number } | null>(null);
 	const lastPreviewUV = useRef<{ x: number; y: number } | null>(null);
@@ -145,20 +150,38 @@ export function WeaponModel({
 		tex.colorSpace = SRGBColorSpace;
 		tex.flipY = false;
 		textureRef.current = tex;
+
+		// Roughness canvas + texture
+		const rc = document.createElement("canvas");
+		rc.width = 2048;
+		rc.height = 2048;
+		const rctx = rc.getContext("2d");
+		if (rctx) {
+			rctx.fillStyle = "#808080";
+			rctx.fillRect(0, 0, 2048, 2048);
+		}
+		roughCanvasRef.current = rc;
+
+		const rTex = new CanvasTexture(rc);
+		rTex.flipY = false;
+		roughTextureRef.current = rTex;
+
 		setReady(true);
 
 		return () => {
 			tex.dispose();
+			rTex.dispose();
 		};
 	}, []);
 
 	// Apply material
 	useEffect(() => {
-		if (!ready || !textureRef.current) return;
+		if (!ready || !textureRef.current || !roughTextureRef.current) return;
 		materialRef.current?.dispose();
 		const mat = new MeshPhysicalMaterial({
 			map: textureRef.current,
 			roughness,
+			roughnessMap: roughTextureRef.current,
 			metalness: metallic,
 		});
 		materialRef.current = mat;
@@ -219,12 +242,26 @@ export function WeaponModel({
 
 		lastPreviewUV.current = previewUV ? { ...previewUV } : null;
 		textureRef.current.needsUpdate = true;
+
+		// Update roughness texture
+		if (roughTextureDirty && roughCanvasRef.current && roughTextureRef.current) {
+			roughTextureDirty = false;
+			const rCtx = roughCanvasRef.current.getContext("2d")!;
+			const rData = layerStack.getRoughnessImageData();
+			rCtx.putImageData(rData, 0, 0);
+			roughTextureRef.current.needsUpdate = true;
+		}
 	});
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: textureVersion change must trigger dirty flag
 	useEffect(() => {
 		textureDirty = true;
 	}, [textureVersion]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: roughnessTextureVersion change must trigger dirty flag
+	useEffect(() => {
+		roughTextureDirty = true;
+	}, [roughnessTextureVersion]);
 
 	// Wireframe overlay
 	useEffect(() => {

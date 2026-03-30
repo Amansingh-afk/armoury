@@ -155,6 +155,13 @@ React 19, Next.js 15, TypeScript, Three.js, React Three Fiber, Drei, Zustand, Ca
 - [ ] Selection tools — rectangular marquee, freeform lasso, magic wand for isolating regions
 - [ ] Gradient tool — linear and radial gradients for color transitions and depth
 
+**Skin Inspector**
+
+- [ ] Inspect link decoder — paste a CS2 inspect link, decode weapon/skin/wear/stickers client-side via `@csfloat/cs-inspect-serializer` (no API key needed)
+- [ ] Skin metadata viewer — show weapon name, finish name, wear float, paint seed, applied stickers from the decoded link
+- [ ] Screenshot fetch — pull existing skin screenshot from CSFloat API for quick mobile-friendly preview
+- [ ] Full 3D inspect (long-term) — render skins with extracted finish textures, Valve's pattern seed placement, and wear degradation. Requires hosting ~2-3GB of finish textures.
+
 **Planned**
 
 - [ ] Texture resolution picker (1024 / 2048 / 4096)

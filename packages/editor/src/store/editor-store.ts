@@ -10,6 +10,15 @@ import type { UVIndex } from "../painting/uv-lookup";
 export type Tool = "pan" | "brush";
 export type ViewMode = "3d" | "2d" | "split";
 
+export interface PartOverrides {
+  removeTexture?: boolean;
+  roughness?: number;
+  metalness?: number;
+  wearLevel?: number;
+  colorTint?: string;
+  finishPreset?: string;
+}
+
 interface UndoEntry {
 	layerId: number;
 	imageData: ImageData;
@@ -32,6 +41,9 @@ export interface EditorState {
 	uvEdges: Array<[number, number, number, number]>;
 	uvIndex: UVIndex | null;
 	hoveredFaces: number[];
+  partOverrides: Map<string, PartOverrides>;
+  partEditMode: boolean;
+  selectedPart: string | null;
 
 	setBrush: (partial: Partial<BrushSettings>) => void;
 	setTool: (tool: Tool) => void;
@@ -63,6 +75,10 @@ export interface EditorState {
 	setUVEdges: (edges: Array<[number, number, number, number]>) => void;
 	setUVIndex: (index: UVIndex) => void;
 	setHoveredFaces: (faces: number[]) => void;
+  setPartOverride: (meshName: string, overrides: Partial<PartOverrides>) => void;
+  resetPartOverride: (meshName: string) => void;
+  togglePartEditMode: () => void;
+  setSelectedPart: (name: string | null) => void;
 	paintStroke: (points: Array<{ x: number; y: number }>) => void;
 }
 
@@ -101,6 +117,9 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 			uvEdges: [],
 			uvIndex: null,
 			hoveredFaces: [],
+			partOverrides: new Map<string, PartOverrides>(),
+			partEditMode: false,
+			selectedPart: null,
 
 			setBrush: (partial) => set((state) => ({ brush: { ...state.brush, ...partial } })),
 
@@ -310,6 +329,28 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 			setUVIndex: (index) => set({ uvIndex: index }),
 
 			setHoveredFaces: (faces) => set({ hoveredFaces: faces }),
+
+			setPartOverride: (meshName, overrides) => {
+				const map = new Map(get().partOverrides);
+				const existing = map.get(meshName) ?? {};
+				map.set(meshName, { ...existing, ...overrides });
+				set({ partOverrides: map });
+				bumpTexture();
+			},
+
+			resetPartOverride: (meshName) => {
+				const map = new Map(get().partOverrides);
+				map.delete(meshName);
+				set({ partOverrides: map });
+				bumpTexture();
+			},
+
+			togglePartEditMode: () => set((s) => ({
+				partEditMode: !s.partEditMode,
+				selectedPart: null,
+			})),
+
+			setSelectedPart: (name) => set({ selectedPart: name }),
 
 			paintStroke: (points) => {
 				const state = get();

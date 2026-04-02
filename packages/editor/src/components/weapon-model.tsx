@@ -45,8 +45,6 @@ interface WeaponModelProps {
 	stickerPreview?: StickerPreview | null;
 	onStickerPlace?: (uvX: number, uvY: number) => void;
 	partEditMode?: boolean;
-	selectedPart?: string | null;
-	onPartHover?: (meshName: string | null) => void;
 	onPartRightClick?: (meshName: string, screenX: number, screenY: number) => void;
 	onMeshGeometriesReady?: (meshes: Array<{ name: string; geometry: BufferGeometry }>) => void;
 }
@@ -70,8 +68,6 @@ export function WeaponModel({
 	stickerPreview,
 	onStickerPlace,
 	partEditMode = false,
-	selectedPart = null,
-	onPartHover,
 	onPartRightClick,
 	onMeshGeometriesReady,
 }: WeaponModelProps) {
@@ -179,8 +175,6 @@ export function WeaponModel({
 
 		const baseMat = new MeshPhysicalMaterial({
 			map: textureRef.current,
-			roughness,
-			metalness: metallic,
 		});
 		materialRef.current = baseMat;
 
@@ -415,10 +409,26 @@ export function WeaponModel({
 		};
 	}, [stickerPreview, onStickerPlace, gl, camera, scene]);
 
-	// Part edit mode: hover raycasting and right-click
+	// Part edit mode: hover raycasting, highlight, and right-click
+	const hoveredPartRef = useRef<string | null>(null);
+	const prevEmissiveRef = useRef<{ meshName: string; color: Color } | null>(null);
+
 	useEffect(() => {
-		if (!partEditMode) return;
+		if (!partEditMode) {
+			// Reset highlight when leaving part edit mode
+			if (prevEmissiveRef.current) {
+				const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
+				if (mat) {
+					mat.emissive.copy(prevEmissiveRef.current.color);
+					mat.needsUpdate = true;
+				}
+				prevEmissiveRef.current = null;
+			}
+			hoveredPartRef.current = null;
+			return;
+		}
 		const canvas = gl.domElement;
+		canvas.style.cursor = "crosshair";
 
 		const getMeshFromEvent = (e: PointerEvent | MouseEvent): ThreeMesh | null => {
 			const rect = canvas.getBoundingClientRect();
@@ -440,11 +450,30 @@ export function WeaponModel({
 
 		const handleMove = (e: PointerEvent) => {
 			const mesh = getMeshFromEvent(e);
-			if (mesh) {
-				const name = mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`;
-				onPartHover?.(name);
-			} else {
-				onPartHover?.(null);
+			const newName = mesh ? (mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`) : null;
+
+			if (newName === hoveredPartRef.current) return;
+
+			// Reset previous highlight
+			if (prevEmissiveRef.current) {
+				const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
+				if (mat) {
+					mat.emissive.copy(prevEmissiveRef.current.color);
+					mat.needsUpdate = true;
+				}
+				prevEmissiveRef.current = null;
+			}
+
+			hoveredPartRef.current = newName;
+
+			// Apply new highlight
+			if (newName) {
+				const mat = materialMapRef.current.get(newName);
+				if (mat) {
+					prevEmissiveRef.current = { meshName: newName, color: mat.emissive.clone() };
+					mat.emissive.set(0x1a3a5c);
+					mat.needsUpdate = true;
+				}
 			}
 		};
 
@@ -458,7 +487,15 @@ export function WeaponModel({
 		};
 
 		const handleLeave = () => {
-			onPartHover?.(null);
+			if (prevEmissiveRef.current) {
+				const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
+				if (mat) {
+					mat.emissive.copy(prevEmissiveRef.current.color);
+					mat.needsUpdate = true;
+				}
+				prevEmissiveRef.current = null;
+			}
+			hoveredPartRef.current = null;
 		};
 
 		canvas.addEventListener("pointermove", handleMove);
@@ -469,33 +506,18 @@ export function WeaponModel({
 			canvas.removeEventListener("pointermove", handleMove);
 			canvas.removeEventListener("contextmenu", handleContextMenu);
 			canvas.removeEventListener("pointerleave", handleLeave);
-			onPartHover?.(null);
-		};
-	}, [partEditMode, gl, camera, scene, onPartHover, onPartRightClick]);
-
-	// Highlight selected part with emissive tint
-	const prevEmissiveRef = useRef<{ meshName: string; color: Color } | null>(null);
-
-	useEffect(() => {
-		// Reset previous highlight
-		if (prevEmissiveRef.current) {
-			const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
-			if (mat) {
-				mat.emissive.copy(prevEmissiveRef.current.color);
-				mat.needsUpdate = true;
+			canvas.style.cursor = "";
+			if (prevEmissiveRef.current) {
+				const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
+				if (mat) {
+					mat.emissive.copy(prevEmissiveRef.current.color);
+					mat.needsUpdate = true;
+				}
+				prevEmissiveRef.current = null;
 			}
-			prevEmissiveRef.current = null;
-		}
-
-		if (!selectedPart || !partEditMode) return;
-
-		const mat = materialMapRef.current.get(selectedPart);
-		if (mat) {
-			prevEmissiveRef.current = { meshName: selectedPart, color: mat.emissive.clone() };
-			mat.emissive.set(0x1a3a5c);
-			mat.needsUpdate = true;
-		}
-	}, [selectedPart, partEditMode]);
+			hoveredPartRef.current = null;
+		};
+	}, [partEditMode, gl, camera, scene, onPartRightClick]);
 
 	// Highlight overlay for hovered faces
 	const highlightRef = useRef<{

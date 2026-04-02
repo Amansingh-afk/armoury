@@ -60,6 +60,7 @@ export function Toolbar({
 }: ToolbarProps) {
 	const stickerInputRef = useRef<HTMLInputElement>(null);
 	const show2DTools = viewMode === "2d" || viewMode === "split";
+	const show3D = viewMode === "3d" || viewMode === "split";
 
 	return (
 		<div className="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900 px-3 py-1.5">
@@ -177,18 +178,20 @@ export function Toolbar({
 				UV Wire
 			</button>
 
-			<button
-				type="button"
-				onClick={onTogglePartEditMode}
-				className={`rounded px-3 py-1 text-xs transition-colors ${
-					partEditMode
-						? "bg-teal-600 text-white"
-						: "text-zinc-400 hover:bg-zinc-800"
-				}`}
-				title="Part Edit Mode (P) — Right-click mesh parts to customize materials"
-			>
-				Parts
-			</button>
+			{show3D && (
+				<button
+					type="button"
+					onClick={onTogglePartEditMode}
+					className={`rounded px-3 py-1 text-xs transition-colors ${
+						partEditMode
+							? "bg-teal-600 text-white"
+							: "text-zinc-400 hover:bg-zinc-800"
+					}`}
+					title="Part Edit Mode (P) — Right-click mesh parts to customize materials"
+				>
+					Parts
+				</button>
+			)}
 
 			{/* Brush tools (only in 2D/split mode) */}
 			{show2DTools && (

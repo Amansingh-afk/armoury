@@ -62,7 +62,6 @@ export function SkinEditor({
 	const hoveredFaces = useStore(store, (s) => s.hoveredFaces);
 	const partOverrides = useStore(store, (s) => s.partOverrides);
 	const partEditMode = useStore(store, (s) => s.partEditMode);
-	const selectedPart = useStore(store, (s) => s.selectedPart);
 
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [showWireframe, setShowWireframe] = useState(true);
@@ -93,13 +92,6 @@ export function SkinEditor({
 			store.getState().setImageTransform(activeLayer.id, { x: uvX, y: uvY });
 		},
 		[store, activeLayer],
-	);
-
-	const handlePartHover = useCallback(
-		(meshName: string | null) => {
-			store.getState().setSelectedPart(meshName);
-		},
-		[store],
 	);
 
 	const handlePartRightClick = useCallback(
@@ -371,8 +363,6 @@ export function SkinEditor({
 										onStickerPlace={handleStickerPlace}
 										partOverrides={partOverrides}
 										partEditMode={partEditMode}
-										selectedPart={selectedPart}
-										onPartHover={handlePartHover}
 										onPartRightClick={handlePartRightClick}
 										onMeshGeometriesReady={setMeshGeometries}
 									/>

@@ -43,7 +43,6 @@ export interface EditorState {
 	hoveredFaces: number[];
   partOverrides: Map<string, PartOverrides>;
   partEditMode: boolean;
-  selectedPart: string | null;
 
 	setBrush: (partial: Partial<BrushSettings>) => void;
 	setTool: (tool: Tool) => void;
@@ -78,7 +77,6 @@ export interface EditorState {
   setPartOverride: (meshName: string, overrides: Partial<PartOverrides>) => void;
   resetPartOverride: (meshName: string) => void;
   togglePartEditMode: () => void;
-  setSelectedPart: (name: string | null) => void;
 	paintStroke: (points: Array<{ x: number; y: number }>) => void;
 }
 
@@ -119,7 +117,6 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 			hoveredFaces: [],
 			partOverrides: new Map<string, PartOverrides>(),
 			partEditMode: false,
-			selectedPart: null,
 
 			setBrush: (partial) => set((state) => ({ brush: { ...state.brush, ...partial } })),
 
@@ -335,22 +332,18 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 				const existing = map.get(meshName) ?? {};
 				map.set(meshName, { ...existing, ...overrides });
 				set({ partOverrides: map });
-				bumpTexture();
 			},
 
 			resetPartOverride: (meshName) => {
 				const map = new Map(get().partOverrides);
 				map.delete(meshName);
 				set({ partOverrides: map });
-				bumpTexture();
 			},
 
 			togglePartEditMode: () => set((s) => ({
 				partEditMode: !s.partEditMode,
-				selectedPart: null,
 			})),
 
-			setSelectedPart: (name) => set({ selectedPart: name }),
 
 			paintStroke: (points) => {
 				const state = get();

@@ -7,6 +7,7 @@ import { dilateSeams } from "../export/seam-dilation";
 import { encodeTGA } from "../export/tga-encoder";
 import { useKeyboardShortcuts } from "../hooks/use-keyboard-shortcuts";
 import { DEFAULT_TEXTURE_SIZE } from "../painting/types";
+import { buildRegionPropertyMap } from "../painting/region-texture";
 import { createEditorStore } from "../store/editor-store";
 import { ExportBar } from "./export-bar";
 import { LayersPanel } from "./layers-panel";
@@ -231,13 +232,22 @@ export function SkinEditor({
 	const handleExportRoughnessMap = useCallback(() => {
 		const canvas = new OffscreenCanvas(textureSize, textureSize);
 		const ctx = canvas.getContext("2d")!;
-		const v = Math.round(roughness * 255);
-		ctx.fillStyle = `rgb(${v},${v},${v})`;
-		ctx.fillRect(0, 0, textureSize, textureSize);
+
+		if (partRegions.length === 0 || !uvIndex) {
+			// No regions — flat roughness
+			const v = Math.round(roughness * 255);
+			ctx.fillStyle = `rgb(${v},${v},${v})`;
+			ctx.fillRect(0, 0, textureSize, textureSize);
+		} else {
+			// Per-region roughness using UV island rasterization
+			const imageData = buildRegionPropertyMap(partRegions, uvIndex, textureSize, textureSize, "roughness", roughness);
+			ctx.putImageData(imageData, 0, 0);
+		}
+
 		canvas.convertToBlob({ type: "image/png" }).then((blob) => {
 			downloadBlob(blob, `weapon_${modelName}_roughness.png`);
 		});
-	}, [roughness, textureSize, modelName]);
+	}, [roughness, textureSize, modelName, partRegions, uvIndex]);
 
 	const handleExportNormalMap = useCallback(() => {
 		const canvas = new OffscreenCanvas(textureSize, textureSize);

@@ -20,6 +20,7 @@ import {
 import { Mesh as ThreeMesh } from "three";
 import type { LayerStack } from "../painting/layer-stack";
 import { type UVIndex, buildUVIndex } from "../painting/uv-lookup";
+import { buildRegionPropertyMap } from "../painting/region-texture";
 
 export interface StickerPreview {
 	image: ImageBitmap;
@@ -81,6 +82,10 @@ export function WeaponModel({
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const textureRef = useRef<CanvasTexture | null>(null);
 	const materialRef = useRef<MeshPhysicalMaterial | null>(null);
+	const roughnessMapRef = useRef<CanvasTexture | null>(null);
+	const metalnessMapRef = useRef<CanvasTexture | null>(null);
+	const roughnessCanvasRef = useRef<HTMLCanvasElement | null>(null);
+	const metalnessCanvasRef = useRef<HTMLCanvasElement | null>(null);
 	const stickerUVRef = useRef<{ x: number; y: number } | null>(null);
 	const lastPreviewUV = useRef<{ x: number; y: number } | null>(null);
 	const [ready, setReady] = useState(false);
@@ -164,6 +169,30 @@ export function WeaponModel({
 		};
 	}, []);
 
+	// Init roughness/metalness map canvases
+	useEffect(() => {
+		const rc = document.createElement("canvas");
+		rc.width = 2048;
+		rc.height = 2048;
+		roughnessCanvasRef.current = rc;
+		const rt = new CanvasTexture(rc);
+		rt.flipY = false;
+		roughnessMapRef.current = rt;
+
+		const mc = document.createElement("canvas");
+		mc.width = 2048;
+		mc.height = 2048;
+		metalnessCanvasRef.current = mc;
+		const mt = new CanvasTexture(mc);
+		mt.flipY = false;
+		metalnessMapRef.current = mt;
+
+		return () => {
+			rt.dispose();
+			mt.dispose();
+		};
+	}, []);
+
 	// Apply material
 	useEffect(() => {
 		if (!ready || !textureRef.current) return;
@@ -184,6 +213,52 @@ export function WeaponModel({
 			materialRef.current = null;
 		};
 	}, [scene, roughness, metallic, ready]);
+
+	// Build and apply roughness/metalness maps from regions
+	useEffect(() => {
+		if (!materialRef.current || !uvIndex) return;
+		const mat = materialRef.current;
+
+		if (partRegions.length === 0) {
+			// No regions — use uniform values
+			mat.roughnessMap = null;
+			mat.metalnessMap = null;
+			mat.roughness = roughness;
+			mat.metalness = metallic;
+			mat.needsUpdate = true;
+			return;
+		}
+
+		// Check if any region actually has roughness/metalness overrides
+		const hasRoughnessOverride = partRegions.some((r) => r.overrides.roughness != null);
+		const hasMetalnessOverride = partRegions.some((r) => r.overrides.metalness != null);
+
+		if (hasRoughnessOverride && roughnessCanvasRef.current && roughnessMapRef.current) {
+			const imageData = buildRegionPropertyMap(partRegions, uvIndex, 2048, 2048, "roughness", roughness);
+			const ctx = roughnessCanvasRef.current.getContext("2d")!;
+			ctx.putImageData(imageData, 0, 0);
+			roughnessMapRef.current.needsUpdate = true;
+			mat.roughnessMap = roughnessMapRef.current;
+			mat.roughness = 1; // When using roughnessMap, set base to 1 so map values are used directly
+		} else {
+			mat.roughnessMap = null;
+			mat.roughness = roughness;
+		}
+
+		if (hasMetalnessOverride && metalnessCanvasRef.current && metalnessMapRef.current) {
+			const imageData = buildRegionPropertyMap(partRegions, uvIndex, 2048, 2048, "metalness", metallic);
+			const ctx = metalnessCanvasRef.current.getContext("2d")!;
+			ctx.putImageData(imageData, 0, 0);
+			metalnessMapRef.current.needsUpdate = true;
+			mat.metalnessMap = metalnessMapRef.current;
+			mat.metalness = 1;
+		} else {
+			mat.metalnessMap = null;
+			mat.metalness = metallic;
+		}
+
+		mat.needsUpdate = true;
+	}, [partRegions, uvIndex, roughness, metallic]);
 
 	useFrame(() => {
 		if (!canvasRef.current || !textureRef.current) return;

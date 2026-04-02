@@ -18,6 +18,7 @@ import { ImageImportDialog, type ImageImportResult } from "./image-import-dialog
 import { Viewport } from "./viewport";
 import type { StickerPreview } from "./weapon-model";
 import { WeaponModel } from "./weapon-model";
+import { PartContextMenu } from "./part-context-menu";
 
 export type { WeaponPickerOption };
 
@@ -58,10 +59,14 @@ export function SkinEditor({
 	const uvEdges = useStore(store, (s) => s.uvEdges);
 	const uvIndex = useStore(store, (s) => s.uvIndex);
 	const hoveredFaces = useStore(store, (s) => s.hoveredFaces);
+	const partOverrides = useStore(store, (s) => s.partOverrides);
+	const partEditMode = useStore(store, (s) => s.partEditMode);
+	const selectedPart = useStore(store, (s) => s.selectedPart);
 
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [showWireframe, setShowWireframe] = useState(true);
 	const [importDialogFile, setImportDialogFile] = useState<{ file: File; mode: "image" | "sticker" } | null>(null);
+	const [contextMenu, setContextMenu] = useState<{ meshName: string; x: number; y: number } | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const activeLayer = layerStack.layers.find((l) => l.id === activeLayerId);
@@ -86,6 +91,35 @@ export function SkinEditor({
 			store.getState().setImageTransform(activeLayer.id, { x: uvX, y: uvY });
 		},
 		[store, activeLayer],
+	);
+
+	const handlePartHover = useCallback(
+		(meshName: string | null) => {
+			store.getState().setSelectedPart(meshName);
+		},
+		[store],
+	);
+
+	const handlePartRightClick = useCallback(
+		(meshName: string, screenX: number, screenY: number) => {
+			setContextMenu({ meshName, x: screenX, y: screenY });
+		},
+		[],
+	);
+
+	const handlePartOverrideUpdate = useCallback(
+		(meshName: string, overrides: Partial<import("../store/editor-store").PartOverrides>) => {
+			store.getState().setPartOverride(meshName, overrides);
+		},
+		[store],
+	);
+
+	const handlePartOverrideReset = useCallback(
+		(meshName: string) => {
+			store.getState().resetPartOverride(meshName);
+			setContextMenu(null);
+		},
+		[store],
 	);
 
 	const handleImportFile = useCallback(
@@ -301,9 +335,28 @@ export function SkinEditor({
 										onUVIndexReady={handleUVIndexReady}
 										stickerPreview={stickerPreview}
 										onStickerPlace={handleStickerPlace}
+										partOverrides={partOverrides}
+										partEditMode={partEditMode}
+										selectedPart={selectedPart}
+										onPartHover={handlePartHover}
+										onPartRightClick={handlePartRightClick}
 									/>
 								</Suspense>
 							</Viewport>
+							{contextMenu && partEditMode && (
+								<PartContextMenu
+									meshName={contextMenu.meshName}
+									screenX={contextMenu.x}
+									screenY={contextMenu.y}
+									overrides={partOverrides.get(contextMenu.meshName) ?? {}}
+									globalRoughness={roughness}
+									globalMetalness={metallic}
+									globalWearLevel={wearLevel}
+									onUpdate={(overrides) => handlePartOverrideUpdate(contextMenu.meshName, overrides)}
+									onReset={() => handlePartOverrideReset(contextMenu.meshName)}
+									onClose={() => setContextMenu(null)}
+								/>
+							)}
 						</div>
 					)}
 					{show2D && (

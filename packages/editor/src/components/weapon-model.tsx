@@ -48,6 +48,7 @@ interface WeaponModelProps {
 	selectedPart?: string | null;
 	onPartHover?: (meshName: string | null) => void;
 	onPartRightClick?: (meshName: string, screenX: number, screenY: number) => void;
+	onMeshGeometriesReady?: (meshes: Array<{ name: string; geometry: BufferGeometry }>) => void;
 }
 
 let textureDirty = false;
@@ -72,6 +73,7 @@ export function WeaponModel({
 	selectedPart = null,
 	onPartHover,
 	onPartRightClick,
+	onMeshGeometriesReady,
 }: WeaponModelProps) {
 	const { scene } = useGLTF(modelPath);
 	const { camera } = useThree();
@@ -328,6 +330,20 @@ export function WeaponModel({
 			}
 		});
 	}, [scene, onUVIndexReady]);
+
+	// Expose mesh geometries to parent
+	useEffect(() => {
+		if (!onMeshGeometriesReady) return;
+		const meshes: Array<{ name: string; geometry: BufferGeometry }> = [];
+		scene.traverse((child) => {
+			if ("isMesh" in child && child.isMesh && !child.userData.isHighlight && !child.userData.isWireframeOverlay) {
+				const mesh = child as ThreeMesh;
+				const name = mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`;
+				meshes.push({ name, geometry: mesh.geometry });
+			}
+		});
+		onMeshGeometriesReady(meshes);
+	}, [scene, onMeshGeometriesReady]);
 
 	// Raycast for 3D sticker placement
 	useEffect(() => {

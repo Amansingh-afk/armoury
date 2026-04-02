@@ -7,6 +7,7 @@ import { dilateSeams } from "../export/seam-dilation";
 import { encodeTGA } from "../export/tga-encoder";
 import { useKeyboardShortcuts } from "../hooks/use-keyboard-shortcuts";
 import { DEFAULT_TEXTURE_SIZE } from "../painting/types";
+import { buildUVOwnershipMap } from "../painting/uv-ownership";
 import { createEditorStore } from "../store/editor-store";
 import { ExportBar } from "./export-bar";
 import { LayersPanel } from "./layers-panel";
@@ -65,6 +66,7 @@ export function SkinEditor({
 
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [showWireframe, setShowWireframe] = useState(true);
+	const [meshGeometries, setMeshGeometries] = useState<Array<{ name: string; geometry: import("three").BufferGeometry }>>([]);
 	const [importDialogFile, setImportDialogFile] = useState<{ file: File; mode: "image" | "sticker" } | null>(null);
 	const [contextMenu, setContextMenu] = useState<{ meshName: string; x: number; y: number } | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -207,13 +209,42 @@ export function SkinEditor({
 	const handleExportRoughnessMap = useCallback(() => {
 		const canvas = new OffscreenCanvas(textureSize, textureSize);
 		const ctx = canvas.getContext("2d")!;
-		const v = Math.round(roughness * 255);
-		ctx.fillStyle = `rgb(${v},${v},${v})`;
-		ctx.fillRect(0, 0, textureSize, textureSize);
+
+		if (partOverrides.size === 0 || meshGeometries.length === 0) {
+			// No per-part overrides — export flat roughness as before
+			const v = Math.round(roughness * 255);
+			ctx.fillStyle = `rgb(${v},${v},${v})`;
+			ctx.fillRect(0, 0, textureSize, textureSize);
+		} else {
+			// Per-part roughness using UV ownership map
+			const ownershipMap = buildUVOwnershipMap(meshGeometries, textureSize, textureSize);
+			const imageData = ctx.createImageData(textureSize, textureSize);
+			const data = imageData.data;
+
+			for (let i = 0; i < ownershipMap.length; i++) {
+				const meshIdx = ownershipMap[i];
+				let r: number;
+				if (meshIdx >= 0 && meshIdx < meshGeometries.length) {
+					const meshName = meshGeometries[meshIdx].name;
+					const override = partOverrides.get(meshName);
+					r = override?.roughness ?? roughness;
+				} else {
+					r = roughness;
+				}
+				const v = Math.round(r * 255);
+				const p = i * 4;
+				data[p] = v;
+				data[p + 1] = v;
+				data[p + 2] = v;
+				data[p + 3] = 255;
+			}
+			ctx.putImageData(imageData, 0, 0);
+		}
+
 		canvas.convertToBlob({ type: "image/png" }).then((blob) => {
 			downloadBlob(blob, `weapon_${modelName}_roughness.png`);
 		});
-	}, [roughness, textureSize, modelName]);
+	}, [roughness, textureSize, modelName, partOverrides, meshGeometries]);
 
 	const handleExportNormalMap = useCallback(() => {
 		const canvas = new OffscreenCanvas(textureSize, textureSize);
@@ -343,6 +374,7 @@ export function SkinEditor({
 										selectedPart={selectedPart}
 										onPartHover={handlePartHover}
 										onPartRightClick={handlePartRightClick}
+										onMeshGeometriesReady={setMeshGeometries}
 									/>
 								</Suspense>
 							</Viewport>

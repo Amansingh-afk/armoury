@@ -20,7 +20,7 @@ const FINISH_PRESETS: FinishPreset[] = [
 ];
 
 interface PartContextMenuProps {
-  meshName: string;
+  regionName: string;
   screenX: number;
   screenY: number;
   overrides: PartOverrides;
@@ -33,7 +33,7 @@ interface PartContextMenuProps {
 }
 
 export function PartContextMenu({
-  meshName,
+  regionName,
   screenX,
   screenY,
   overrides,
@@ -90,7 +90,7 @@ export function PartContextMenu({
     <div ref={ref} style={style} className="w-60 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl p-3 flex flex-col gap-2.5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-zinc-200 truncate">{meshName}</span>
+        <span className="text-xs font-semibold text-zinc-200 truncate">{regionName}</span>
         <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xs px-1">✕</button>
       </div>
 

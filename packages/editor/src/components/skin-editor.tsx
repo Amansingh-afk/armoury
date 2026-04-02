@@ -7,7 +7,6 @@ import { dilateSeams } from "../export/seam-dilation";
 import { encodeTGA } from "../export/tga-encoder";
 import { useKeyboardShortcuts } from "../hooks/use-keyboard-shortcuts";
 import { DEFAULT_TEXTURE_SIZE } from "../painting/types";
-import { buildUVOwnershipMap } from "../painting/uv-ownership";
 import { createEditorStore } from "../store/editor-store";
 import { ExportBar } from "./export-bar";
 import { LayersPanel } from "./layers-panel";
@@ -60,14 +59,14 @@ export function SkinEditor({
 	const uvEdges = useStore(store, (s) => s.uvEdges);
 	const uvIndex = useStore(store, (s) => s.uvIndex);
 	const hoveredFaces = useStore(store, (s) => s.hoveredFaces);
-	const partOverrides = useStore(store, (s) => s.partOverrides);
+	const partRegions = useStore(store, (s) => s.partRegions);
+	const activeRegionId = useStore(store, (s) => s.activeRegionId);
 	const partEditMode = useStore(store, (s) => s.partEditMode);
 
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [showWireframe, setShowWireframe] = useState(true);
-	const [meshGeometries, setMeshGeometries] = useState<Array<{ name: string; geometry: import("three").BufferGeometry }>>([]);
 	const [importDialogFile, setImportDialogFile] = useState<{ file: File; mode: "image" | "sticker" } | null>(null);
-	const [contextMenu, setContextMenu] = useState<{ meshName: string; x: number; y: number } | null>(null);
+	const [contextMenu, setContextMenu] = useState<{ regionId: number; x: number; y: number } | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const activeLayer = layerStack.layers.find((l) => l.id === activeLayerId);
@@ -94,23 +93,54 @@ export function SkinEditor({
 		[store, activeLayer],
 	);
 
-	const handlePartRightClick = useCallback(
-		(meshName: string, screenX: number, screenY: number) => {
-			setContextMenu({ meshName, x: screenX, y: screenY });
-		},
-		[],
-	);
-
-	const handlePartOverrideUpdate = useCallback(
-		(meshName: string, overrides: Partial<import("../store/editor-store").PartOverrides>) => {
-			store.getState().setPartOverride(meshName, overrides);
+	const handleIslandHover = useCallback(
+		(faces: number[]) => {
+			store.getState().setHoveredFaces(faces);
 		},
 		[store],
 	);
 
-	const handlePartOverrideReset = useCallback(
-		(meshName: string) => {
-			store.getState().resetPartOverride(meshName);
+	const handleIslandRightClick = useCallback(
+		(islandId: number, screenX: number, screenY: number) => {
+			const state = store.getState();
+			// Check if this island already belongs to a region
+			const existingRegion = state.partRegions.find((r) => r.islands.has(islandId));
+			if (existingRegion) {
+				// Open context menu for existing region
+				store.getState().setActiveRegionId(existingRegion.id);
+				setContextMenu({ regionId: existingRegion.id, x: screenX, y: screenY });
+			} else {
+				// Create new region with this island
+				const regionId = store.getState().createRegion([islandId]);
+				setContextMenu({ regionId, x: screenX, y: screenY });
+			}
+		},
+		[store],
+	);
+
+	const handleIslandShiftClick = useCallback(
+		(islandId: number) => {
+			const state = store.getState();
+			const activeId = state.activeRegionId;
+			if (activeId == null) return;
+			// Don't add if island already belongs to another region
+			const existingRegion = state.partRegions.find((r) => r.islands.has(islandId));
+			if (existingRegion) return;
+			store.getState().addIslandsToRegion(activeId, [islandId]);
+		},
+		[store],
+	);
+
+	const handleRegionOverrideUpdate = useCallback(
+		(regionId: number, overrides: Partial<import("../store/editor-store").PartOverrides>) => {
+			store.getState().setRegionOverride(regionId, overrides);
+		},
+		[store],
+	);
+
+	const handleRegionReset = useCallback(
+		(regionId: number) => {
+			store.getState().removeRegion(regionId);
 			setContextMenu(null);
 		},
 		[store],
@@ -201,42 +231,13 @@ export function SkinEditor({
 	const handleExportRoughnessMap = useCallback(() => {
 		const canvas = new OffscreenCanvas(textureSize, textureSize);
 		const ctx = canvas.getContext("2d")!;
-
-		if (partOverrides.size === 0 || meshGeometries.length === 0) {
-			// No per-part overrides — export flat roughness as before
-			const v = Math.round(roughness * 255);
-			ctx.fillStyle = `rgb(${v},${v},${v})`;
-			ctx.fillRect(0, 0, textureSize, textureSize);
-		} else {
-			// Per-part roughness using UV ownership map
-			const ownershipMap = buildUVOwnershipMap(meshGeometries, textureSize, textureSize);
-			const imageData = ctx.createImageData(textureSize, textureSize);
-			const data = imageData.data;
-
-			for (let i = 0; i < ownershipMap.length; i++) {
-				const meshIdx = ownershipMap[i];
-				let r: number;
-				if (meshIdx >= 0 && meshIdx < meshGeometries.length) {
-					const meshName = meshGeometries[meshIdx].name;
-					const override = partOverrides.get(meshName);
-					r = override?.roughness ?? roughness;
-				} else {
-					r = roughness;
-				}
-				const v = Math.round(r * 255);
-				const p = i * 4;
-				data[p] = v;
-				data[p + 1] = v;
-				data[p + 2] = v;
-				data[p + 3] = 255;
-			}
-			ctx.putImageData(imageData, 0, 0);
-		}
-
+		const v = Math.round(roughness * 255);
+		ctx.fillStyle = `rgb(${v},${v},${v})`;
+		ctx.fillRect(0, 0, textureSize, textureSize);
 		canvas.convertToBlob({ type: "image/png" }).then((blob) => {
 			downloadBlob(blob, `weapon_${modelName}_roughness.png`);
 		});
-	}, [roughness, textureSize, modelName, partOverrides, meshGeometries]);
+	}, [roughness, textureSize, modelName]);
 
 	const handleExportNormalMap = useCallback(() => {
 		const canvas = new OffscreenCanvas(textureSize, textureSize);
@@ -361,27 +362,33 @@ export function SkinEditor({
 										onUVIndexReady={handleUVIndexReady}
 										stickerPreview={stickerPreview}
 										onStickerPlace={handleStickerPlace}
-										partOverrides={partOverrides}
+										partRegions={partRegions}
+										uvIndex={uvIndex}
 										partEditMode={partEditMode}
-										onPartRightClick={handlePartRightClick}
-										onMeshGeometriesReady={setMeshGeometries}
+										onIslandHover={handleIslandHover}
+										onIslandRightClick={handleIslandRightClick}
+										onIslandShiftClick={handleIslandShiftClick}
 									/>
 								</Suspense>
 							</Viewport>
-							{contextMenu && partEditMode && (
-								<PartContextMenu
-									meshName={contextMenu.meshName}
-									screenX={contextMenu.x}
-									screenY={contextMenu.y}
-									overrides={partOverrides.get(contextMenu.meshName) ?? {}}
-									globalRoughness={roughness}
-									globalMetalness={metallic}
-									globalWearLevel={wearLevel}
-									onUpdate={(overrides) => handlePartOverrideUpdate(contextMenu.meshName, overrides)}
-									onReset={() => handlePartOverrideReset(contextMenu.meshName)}
-									onClose={() => setContextMenu(null)}
-								/>
-							)}
+							{contextMenu && partEditMode && (() => {
+								const region = partRegions.find((r) => r.id === contextMenu.regionId);
+								if (!region) return null;
+								return (
+									<PartContextMenu
+										regionName={region.name}
+										screenX={contextMenu.x}
+										screenY={contextMenu.y}
+										overrides={region.overrides}
+										globalRoughness={roughness}
+										globalMetalness={metallic}
+										globalWearLevel={wearLevel}
+										onUpdate={(overrides) => handleRegionOverrideUpdate(region.id, overrides)}
+										onReset={() => handleRegionReset(region.id)}
+										onClose={() => setContextMenu(null)}
+									/>
+								);
+							})()}
 						</div>
 					)}
 					{show2D && (

@@ -20,6 +20,7 @@ import {
 import { Mesh as ThreeMesh } from "three";
 import type { LayerStack } from "../painting/layer-stack";
 import { type UVIndex, buildUVIndex } from "../painting/uv-lookup";
+import type { PartOverrides } from "../store/editor-store";
 
 export interface StickerPreview {
 	image: ImageBitmap;
@@ -37,6 +38,7 @@ interface WeaponModelProps {
 	textureVersion: number;
 	showWireframe: boolean;
 	hoveredFaces: number[];
+	partOverrides?: Map<string, PartOverrides>;
 	onUVEdgesReady?: (edges: Array<[number, number, number, number]>) => void;
 	onUVIndexReady?: (index: UVIndex) => void;
 	stickerPreview?: StickerPreview | null;
@@ -56,6 +58,7 @@ export function WeaponModel({
 	textureVersion,
 	showWireframe,
 	hoveredFaces,
+	partOverrides = new Map(),
 	onUVEdgesReady,
 	onUVIndexReady,
 	stickerPreview,
@@ -69,6 +72,7 @@ export function WeaponModel({
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const textureRef = useRef<CanvasTexture | null>(null);
 	const materialRef = useRef<MeshPhysicalMaterial | null>(null);
+	const materialMapRef = useRef<Map<string, MeshPhysicalMaterial>>(new Map());
 	const stickerUVRef = useRef<{ x: number; y: number } | null>(null);
 	const lastPreviewUV = useRef<{ x: number; y: number } | null>(null);
 	const [ready, setReady] = useState(false);
@@ -152,28 +156,66 @@ export function WeaponModel({
 		};
 	}, []);
 
-	// Apply material
+	// Per-mesh material cloning
 	useEffect(() => {
 		if (!ready || !textureRef.current) return;
-		materialRef.current?.dispose();
-		const mat = new MeshPhysicalMaterial({
+
+		// Dispose old materials
+		for (const mat of materialMapRef.current.values()) {
+			mat.dispose();
+		}
+		materialMapRef.current.clear();
+
+		const baseMat = new MeshPhysicalMaterial({
 			map: textureRef.current,
 			roughness,
 			metalness: metallic,
 		});
-		materialRef.current = mat;
+		materialRef.current = baseMat;
+
 		scene.traverse((child) => {
 			if ("isMesh" in child && child.isMesh) {
-				(child as any).material = mat;
+				const mesh = child as ThreeMesh;
+				const cloned = baseMat.clone();
+				mesh.material = cloned;
+				const name = mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`;
+				materialMapRef.current.set(name, cloned);
 			}
 		});
+
 		return () => {
-			mat.dispose();
+			for (const mat of materialMapRef.current.values()) {
+				mat.dispose();
+			}
+			materialMapRef.current.clear();
+			baseMat.dispose();
 			materialRef.current = null;
 		};
-	}, [scene, roughness, metallic, ready]);
+	}, [scene, ready]);
 
 	useFrame(() => {
+		// Reconcile per-mesh materials with overrides
+		for (const [name, material] of materialMapRef.current) {
+			const override = partOverrides.get(name);
+			material.roughness = override?.roughness ?? roughness;
+			material.metalness = override?.metalness ?? metallic;
+
+			if (override?.removeTexture) {
+				if (material.map !== null) {
+					material.map = null;
+					material.needsUpdate = true;
+				}
+				const tint = override?.colorTint ?? "#808080";
+				material.color.set(tint);
+			} else {
+				if (material.map !== textureRef.current) {
+					material.map = textureRef.current;
+					material.needsUpdate = true;
+				}
+				material.color.set(override?.colorTint ?? "#ffffff");
+			}
+		}
+
 		if (!canvasRef.current || !textureRef.current) return;
 
 		const previewUV = stickerUVRef.current;

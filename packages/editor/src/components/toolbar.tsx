@@ -23,6 +23,8 @@ interface ToolbarProps {
 	onImportSticker: (file: File) => void;
 	showWireframe: boolean;
 	onToggleWireframe: () => void;
+	partEditMode: boolean;
+	onTogglePartEditMode: () => void;
 	viewMode: ViewMode;
 	onSetViewMode: (mode: ViewMode) => void;
 	activeTool: Tool;
@@ -47,6 +49,8 @@ export function Toolbar({
 	onImportSticker,
 	showWireframe,
 	onToggleWireframe,
+	partEditMode,
+	onTogglePartEditMode,
 	viewMode,
 	onSetViewMode,
 	activeTool,
@@ -171,6 +175,19 @@ export function Toolbar({
 				title="Toggle UV wireframe overlay"
 			>
 				UV Wire
+			</button>
+
+			<button
+				type="button"
+				onClick={onTogglePartEditMode}
+				className={`rounded px-3 py-1 text-xs transition-colors ${
+					partEditMode
+						? "bg-teal-600 text-white"
+						: "text-zinc-400 hover:bg-zinc-800"
+				}`}
+				title="Part Edit Mode (P) — Right-click mesh parts to customize materials"
+			>
+				Parts
 			</button>
 
 			{/* Brush tools (only in 2D/split mode) */}

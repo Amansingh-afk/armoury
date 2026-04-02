@@ -268,6 +268,7 @@ export function SkinEditor({
 		onEscape: () => store.getState().setTool("pan"),
 		getActivePlaceTransform,
 		onImageTransformChange: handleImageTransformChange,
+		onTogglePartEditMode: () => store.getState().togglePartEditMode(),
 	});
 
 	const show3D = viewMode === "3d" || viewMode === "split";
@@ -289,6 +290,8 @@ export function SkinEditor({
 				onImportSticker={handleStickerFile}
 				showWireframe={showWireframe}
 				onToggleWireframe={() => setShowWireframe((v) => !v)}
+				partEditMode={partEditMode}
+				onTogglePartEditMode={() => store.getState().togglePartEditMode()}
 				viewMode={viewMode}
 				onSetViewMode={(mode) => store.getState().setViewMode(mode)}
 				activeTool={activeTool}

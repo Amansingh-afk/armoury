@@ -6,7 +6,6 @@ import {
 	BufferAttribute,
 	BufferGeometry,
 	CanvasTexture,
-	Color,
 	DoubleSide,
 	MeshBasicMaterial,
 	MeshPhysicalMaterial,
@@ -21,7 +20,6 @@ import {
 import { Mesh as ThreeMesh } from "three";
 import type { LayerStack } from "../painting/layer-stack";
 import { type UVIndex, buildUVIndex } from "../painting/uv-lookup";
-import type { PartOverrides } from "../store/editor-store";
 
 export interface StickerPreview {
 	image: ImageBitmap;
@@ -39,14 +37,16 @@ interface WeaponModelProps {
 	textureVersion: number;
 	showWireframe: boolean;
 	hoveredFaces: number[];
-	partOverrides?: Map<string, PartOverrides>;
+	partRegions?: import("../store/editor-store").PartRegion[];
+	uvIndex?: import("../painting/uv-lookup").UVIndex | null;
 	onUVEdgesReady?: (edges: Array<[number, number, number, number]>) => void;
 	onUVIndexReady?: (index: UVIndex) => void;
 	stickerPreview?: StickerPreview | null;
 	onStickerPlace?: (uvX: number, uvY: number) => void;
 	partEditMode?: boolean;
-	onPartRightClick?: (meshName: string, screenX: number, screenY: number) => void;
-	onMeshGeometriesReady?: (meshes: Array<{ name: string; geometry: BufferGeometry }>) => void;
+	onIslandHover?: (faces: number[]) => void;
+	onIslandRightClick?: (islandId: number, screenX: number, screenY: number) => void;
+	onIslandShiftClick?: (islandId: number) => void;
 }
 
 let textureDirty = false;
@@ -62,14 +62,16 @@ export function WeaponModel({
 	textureVersion,
 	showWireframe,
 	hoveredFaces,
-	partOverrides = new Map(),
+	partRegions = [],
+	uvIndex,
 	onUVEdgesReady,
 	onUVIndexReady,
 	stickerPreview,
 	onStickerPlace,
 	partEditMode = false,
-	onPartRightClick,
-	onMeshGeometriesReady,
+	onIslandHover,
+	onIslandRightClick,
+	onIslandShiftClick,
 }: WeaponModelProps) {
 	const { scene } = useGLTF(modelPath);
 	const { camera } = useThree();
@@ -79,7 +81,6 @@ export function WeaponModel({
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const textureRef = useRef<CanvasTexture | null>(null);
 	const materialRef = useRef<MeshPhysicalMaterial | null>(null);
-	const materialMapRef = useRef<Map<string, MeshPhysicalMaterial>>(new Map());
 	const stickerUVRef = useRef<{ x: number; y: number } | null>(null);
 	const lastPreviewUV = useRef<{ x: number; y: number } | null>(null);
 	const [ready, setReady] = useState(false);
@@ -163,64 +164,28 @@ export function WeaponModel({
 		};
 	}, []);
 
-	// Per-mesh material cloning
+	// Apply material
 	useEffect(() => {
 		if (!ready || !textureRef.current) return;
-
-		// Dispose old materials
-		for (const mat of materialMapRef.current.values()) {
-			mat.dispose();
-		}
-		materialMapRef.current.clear();
-
-		const baseMat = new MeshPhysicalMaterial({
+		materialRef.current?.dispose();
+		const mat = new MeshPhysicalMaterial({
 			map: textureRef.current,
+			roughness,
+			metalness: metallic,
 		});
-		materialRef.current = baseMat;
-
+		materialRef.current = mat;
 		scene.traverse((child) => {
 			if ("isMesh" in child && child.isMesh) {
-				const mesh = child as ThreeMesh;
-				const cloned = baseMat.clone();
-				mesh.material = cloned;
-				const name = mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`;
-				materialMapRef.current.set(name, cloned);
+				(child as any).material = mat;
 			}
 		});
-
 		return () => {
-			for (const mat of materialMapRef.current.values()) {
-				mat.dispose();
-			}
-			materialMapRef.current.clear();
-			baseMat.dispose();
+			mat.dispose();
 			materialRef.current = null;
 		};
-	}, [scene, ready]);
+	}, [scene, roughness, metallic, ready]);
 
 	useFrame(() => {
-		// Reconcile per-mesh materials with overrides
-		for (const [name, material] of materialMapRef.current) {
-			const override = partOverrides.get(name);
-			material.roughness = override?.roughness ?? roughness;
-			material.metalness = override?.metalness ?? metallic;
-
-			if (override?.removeTexture) {
-				if (material.map !== null) {
-					material.map = null;
-					material.needsUpdate = true;
-				}
-				const tint = override?.colorTint ?? "#808080";
-				material.color.set(tint);
-			} else {
-				if (material.map !== textureRef.current) {
-					material.map = textureRef.current;
-					material.needsUpdate = true;
-				}
-				material.color.set(override?.colorTint ?? "#ffffff");
-			}
-		}
-
 		if (!canvasRef.current || !textureRef.current) return;
 
 		const previewUV = stickerUVRef.current;
@@ -325,20 +290,6 @@ export function WeaponModel({
 		});
 	}, [scene, onUVIndexReady]);
 
-	// Expose mesh geometries to parent
-	useEffect(() => {
-		if (!onMeshGeometriesReady) return;
-		const meshes: Array<{ name: string; geometry: BufferGeometry }> = [];
-		scene.traverse((child) => {
-			if ("isMesh" in child && child.isMesh && !child.userData.isHighlight && !child.userData.isWireframeOverlay) {
-				const mesh = child as ThreeMesh;
-				const name = mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`;
-				meshes.push({ name, geometry: mesh.geometry });
-			}
-		});
-		onMeshGeometriesReady(meshes);
-	}, [scene, onMeshGeometriesReady]);
-
 	// Raycast for 3D sticker placement
 	useEffect(() => {
 		if (!stickerPreview || !onStickerPlace) return;
@@ -409,28 +360,13 @@ export function WeaponModel({
 		};
 	}, [stickerPreview, onStickerPlace, gl, camera, scene]);
 
-	// Part edit mode: hover raycasting, highlight, and right-click
-	const hoveredPartRef = useRef<string | null>(null);
-	const prevEmissiveRef = useRef<{ meshName: string; color: Color } | null>(null);
-
+	// Part edit mode: UV island hover, right-click, shift+click
 	useEffect(() => {
-		if (!partEditMode) {
-			// Reset highlight when leaving part edit mode
-			if (prevEmissiveRef.current) {
-				const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
-				if (mat) {
-					mat.emissive.copy(prevEmissiveRef.current.color);
-					mat.needsUpdate = true;
-				}
-				prevEmissiveRef.current = null;
-			}
-			hoveredPartRef.current = null;
-			return;
-		}
+		if (!partEditMode || !uvIndex) return;
 		const canvas = gl.domElement;
 		canvas.style.cursor = "crosshair";
 
-		const getMeshFromEvent = (e: PointerEvent | MouseEvent): ThreeMesh | null => {
+		const getIslandFromEvent = (e: PointerEvent | MouseEvent): number | null => {
 			const rect = canvas.getBoundingClientRect();
 			pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
 			pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -445,79 +381,63 @@ export function WeaponModel({
 
 			const intersects = raycaster.intersectObjects(meshes, false);
 			if (intersects.length === 0) return null;
-			return intersects[0].object as ThreeMesh;
+
+			const faceIndex = intersects[0].faceIndex;
+			if (faceIndex == null) return null;
+
+			return uvIndex.islandOf[faceIndex] ?? null;
 		};
 
+		let lastIslandId: number | null = null;
+
 		const handleMove = (e: PointerEvent) => {
-			const mesh = getMeshFromEvent(e);
-			const newName = mesh ? (mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`) : null;
+			const islandId = getIslandFromEvent(e);
+			if (islandId === lastIslandId) return;
+			lastIslandId = islandId;
 
-			if (newName === hoveredPartRef.current) return;
-
-			// Reset previous highlight
-			if (prevEmissiveRef.current) {
-				const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
-				if (mat) {
-					mat.emissive.copy(prevEmissiveRef.current.color);
-					mat.needsUpdate = true;
-				}
-				prevEmissiveRef.current = null;
-			}
-
-			hoveredPartRef.current = newName;
-
-			// Apply new highlight
-			if (newName) {
-				const mat = materialMapRef.current.get(newName);
-				if (mat) {
-					prevEmissiveRef.current = { meshName: newName, color: mat.emissive.clone() };
-					mat.emissive.set(0x1a3a5c);
-					mat.needsUpdate = true;
-				}
+			if (islandId != null) {
+				const faces = uvIndex.islandFaces.get(islandId) ?? [];
+				onIslandHover?.(faces);
+			} else {
+				onIslandHover?.([]);
 			}
 		};
 
 		const handleContextMenu = (e: MouseEvent) => {
 			e.preventDefault();
-			const mesh = getMeshFromEvent(e);
-			if (mesh) {
-				const name = mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`;
-				onPartRightClick?.(name, e.clientX, e.clientY);
+			const islandId = getIslandFromEvent(e);
+			if (islandId != null) {
+				onIslandRightClick?.(islandId, e.clientX, e.clientY);
+			}
+		};
+
+		const handleClick = (e: MouseEvent) => {
+			if (!e.shiftKey || e.button !== 0) return;
+			const islandId = getIslandFromEvent(e);
+			if (islandId != null) {
+				onIslandShiftClick?.(islandId);
 			}
 		};
 
 		const handleLeave = () => {
-			if (prevEmissiveRef.current) {
-				const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
-				if (mat) {
-					mat.emissive.copy(prevEmissiveRef.current.color);
-					mat.needsUpdate = true;
-				}
-				prevEmissiveRef.current = null;
-			}
-			hoveredPartRef.current = null;
+			lastIslandId = null;
+			onIslandHover?.([]);
 		};
 
 		canvas.addEventListener("pointermove", handleMove);
 		canvas.addEventListener("contextmenu", handleContextMenu);
+		canvas.addEventListener("click", handleClick);
 		canvas.addEventListener("pointerleave", handleLeave);
 
 		return () => {
 			canvas.removeEventListener("pointermove", handleMove);
 			canvas.removeEventListener("contextmenu", handleContextMenu);
+			canvas.removeEventListener("click", handleClick);
 			canvas.removeEventListener("pointerleave", handleLeave);
 			canvas.style.cursor = "";
-			if (prevEmissiveRef.current) {
-				const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
-				if (mat) {
-					mat.emissive.copy(prevEmissiveRef.current.color);
-					mat.needsUpdate = true;
-				}
-				prevEmissiveRef.current = null;
-			}
-			hoveredPartRef.current = null;
+			onIslandHover?.([]);
 		};
-	}, [partEditMode, gl, camera, scene, onPartRightClick]);
+	}, [partEditMode, uvIndex, gl, camera, scene, onIslandHover, onIslandRightClick, onIslandShiftClick]);
 
 	// Highlight overlay for hovered faces
 	const highlightRef = useRef<{

@@ -7,6 +7,7 @@ interface KeyboardShortcutHandlers {
 	onEscape: () => void;
 	getActivePlaceTransform: () => { layerId: number; transform: ImageTransform } | null;
 	onImageTransformChange: (layerId: number, partial: Partial<ImageTransform>) => void;
+	onTogglePartEditMode: () => void;
 }
 
 const SCALE_STEP = 0.02;
@@ -18,6 +19,7 @@ export function useKeyboardShortcuts({
 	onEscape,
 	getActivePlaceTransform,
 	onImageTransformChange,
+	onTogglePartEditMode,
 }: KeyboardShortcutHandlers) {
 	useEffect(() => {
 		const handleKey = (e: KeyboardEvent) => {
@@ -37,6 +39,12 @@ export function useKeyboardShortcuts({
 			if (e.key === "Escape") {
 				e.preventDefault();
 				onEscape();
+				return;
+			}
+
+			if (e.key === "p" || e.key === "P") {
+				e.preventDefault();
+				onTogglePartEditMode();
 				return;
 			}
 
@@ -102,5 +110,5 @@ export function useKeyboardShortcuts({
 			window.removeEventListener("keydown", handleKey);
 			window.removeEventListener("wheel", handleWheel);
 		};
-	}, [onUndo, onRedo, onEscape, getActivePlaceTransform, onImageTransformChange]);
+	}, [onUndo, onRedo, onEscape, getActivePlaceTransform, onImageTransformChange, onTogglePartEditMode]);
 }

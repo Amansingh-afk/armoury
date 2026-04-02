@@ -6,6 +6,7 @@ import {
 	BufferAttribute,
 	BufferGeometry,
 	CanvasTexture,
+	Color,
 	DoubleSide,
 	MeshBasicMaterial,
 	MeshPhysicalMaterial,
@@ -43,6 +44,10 @@ interface WeaponModelProps {
 	onUVIndexReady?: (index: UVIndex) => void;
 	stickerPreview?: StickerPreview | null;
 	onStickerPlace?: (uvX: number, uvY: number) => void;
+	partEditMode?: boolean;
+	selectedPart?: string | null;
+	onPartHover?: (meshName: string | null) => void;
+	onPartRightClick?: (meshName: string, screenX: number, screenY: number) => void;
 }
 
 let textureDirty = false;
@@ -63,6 +68,10 @@ export function WeaponModel({
 	onUVIndexReady,
 	stickerPreview,
 	onStickerPlace,
+	partEditMode = false,
+	selectedPart = null,
+	onPartHover,
+	onPartRightClick,
 }: WeaponModelProps) {
 	const { scene } = useGLTF(modelPath);
 	const { camera } = useThree();
@@ -389,6 +398,88 @@ export function WeaponModel({
 			lastPreviewUV.current = null;
 		};
 	}, [stickerPreview, onStickerPlace, gl, camera, scene]);
+
+	// Part edit mode: hover raycasting and right-click
+	useEffect(() => {
+		if (!partEditMode) return;
+		const canvas = gl.domElement;
+
+		const getMeshFromEvent = (e: PointerEvent | MouseEvent): ThreeMesh | null => {
+			const rect = canvas.getBoundingClientRect();
+			pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+			pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+			raycaster.setFromCamera(pointer, camera);
+
+			const meshes: ThreeMesh[] = [];
+			scene.traverse((child) => {
+				if ("isMesh" in child && child.isMesh && !child.userData.isHighlight && !child.userData.isWireframeOverlay) {
+					meshes.push(child as ThreeMesh);
+				}
+			});
+
+			const intersects = raycaster.intersectObjects(meshes, false);
+			if (intersects.length === 0) return null;
+			return intersects[0].object as ThreeMesh;
+		};
+
+		const handleMove = (e: PointerEvent) => {
+			const mesh = getMeshFromEvent(e);
+			if (mesh) {
+				const name = mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`;
+				onPartHover?.(name);
+			} else {
+				onPartHover?.(null);
+			}
+		};
+
+		const handleContextMenu = (e: MouseEvent) => {
+			e.preventDefault();
+			const mesh = getMeshFromEvent(e);
+			if (mesh) {
+				const name = mesh.name || `mesh_${mesh.uuid.slice(0, 8)}`;
+				onPartRightClick?.(name, e.clientX, e.clientY);
+			}
+		};
+
+		const handleLeave = () => {
+			onPartHover?.(null);
+		};
+
+		canvas.addEventListener("pointermove", handleMove);
+		canvas.addEventListener("contextmenu", handleContextMenu);
+		canvas.addEventListener("pointerleave", handleLeave);
+
+		return () => {
+			canvas.removeEventListener("pointermove", handleMove);
+			canvas.removeEventListener("contextmenu", handleContextMenu);
+			canvas.removeEventListener("pointerleave", handleLeave);
+			onPartHover?.(null);
+		};
+	}, [partEditMode, gl, camera, scene, onPartHover, onPartRightClick]);
+
+	// Highlight selected part with emissive tint
+	const prevEmissiveRef = useRef<{ meshName: string; color: Color } | null>(null);
+
+	useEffect(() => {
+		// Reset previous highlight
+		if (prevEmissiveRef.current) {
+			const mat = materialMapRef.current.get(prevEmissiveRef.current.meshName);
+			if (mat) {
+				mat.emissive.copy(prevEmissiveRef.current.color);
+				mat.needsUpdate = true;
+			}
+			prevEmissiveRef.current = null;
+		}
+
+		if (!selectedPart || !partEditMode) return;
+
+		const mat = materialMapRef.current.get(selectedPart);
+		if (mat) {
+			prevEmissiveRef.current = { meshName: selectedPart, color: mat.emissive.clone() };
+			mat.emissive.set(0x1a3a5c);
+			mat.needsUpdate = true;
+		}
+	}, [selectedPart, partEditMode]);
 
 	// Highlight overlay for hovered faces
 	const highlightRef = useRef<{

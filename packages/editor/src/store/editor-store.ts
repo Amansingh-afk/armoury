@@ -19,6 +19,13 @@ export interface PartOverrides {
   finishPreset?: string;
 }
 
+export interface PartRegion {
+  id: number;
+  name: string;           // "Region 1", "Region 2", etc.
+  islands: Set<number>;   // UV island indices (from UVIndex.islandOf)
+  overrides: PartOverrides;
+}
+
 interface UndoEntry {
 	layerId: number;
 	imageData: ImageData;
@@ -41,7 +48,9 @@ export interface EditorState {
 	uvEdges: Array<[number, number, number, number]>;
 	uvIndex: UVIndex | null;
 	hoveredFaces: number[];
-  partOverrides: Map<string, PartOverrides>;
+  partRegions: PartRegion[];
+  regionCount: number;
+  activeRegionId: number | null;  // region whose context menu is open
   partEditMode: boolean;
 
 	setBrush: (partial: Partial<BrushSettings>) => void;
@@ -74,8 +83,12 @@ export interface EditorState {
 	setUVEdges: (edges: Array<[number, number, number, number]>) => void;
 	setUVIndex: (index: UVIndex) => void;
 	setHoveredFaces: (faces: number[]) => void;
-  setPartOverride: (meshName: string, overrides: Partial<PartOverrides>) => void;
-  resetPartOverride: (meshName: string) => void;
+  createRegion: (islandIds: number[]) => number;   // returns new region ID
+  addIslandsToRegion: (regionId: number, islandIds: number[]) => void;
+  removeRegion: (regionId: number) => void;
+  setRegionOverride: (regionId: number, overrides: Partial<PartOverrides>) => void;
+  resetRegionOverride: (regionId: number) => void;
+  setActiveRegionId: (id: number | null) => void;
   togglePartEditMode: () => void;
 	paintStroke: (points: Array<{ x: number; y: number }>) => void;
 }
@@ -115,7 +128,9 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 			uvEdges: [],
 			uvIndex: null,
 			hoveredFaces: [],
-			partOverrides: new Map<string, PartOverrides>(),
+			partRegions: [],
+			regionCount: 0,
+			activeRegionId: null,
 			partEditMode: false,
 
 			setBrush: (partial) => set((state) => ({ brush: { ...state.brush, ...partial } })),
@@ -327,18 +342,58 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 
 			setHoveredFaces: (faces) => set({ hoveredFaces: faces }),
 
-			setPartOverride: (meshName, overrides) => {
-				const map = new Map(get().partOverrides);
-				const existing = map.get(meshName) ?? {};
-				map.set(meshName, { ...existing, ...overrides });
-				set({ partOverrides: map });
+			createRegion: (islandIds) => {
+				const count = get().regionCount + 1;
+				const region: PartRegion = {
+					id: count,
+					name: `Region ${count}`,
+					islands: new Set(islandIds),
+					overrides: {},
+				};
+				set({
+					partRegions: [...get().partRegions, region],
+					regionCount: count,
+					activeRegionId: count,
+				});
+				return count;
 			},
 
-			resetPartOverride: (meshName) => {
-				const map = new Map(get().partOverrides);
-				map.delete(meshName);
-				set({ partOverrides: map });
+			addIslandsToRegion: (regionId, islandIds) => {
+				set({
+					partRegions: get().partRegions.map((r) =>
+						r.id === regionId
+							? { ...r, islands: new Set([...r.islands, ...islandIds]) }
+							: r
+					),
+				});
 			},
+
+			removeRegion: (regionId) => {
+				set({
+					partRegions: get().partRegions.filter((r) => r.id !== regionId),
+					activeRegionId: get().activeRegionId === regionId ? null : get().activeRegionId,
+				});
+			},
+
+			setRegionOverride: (regionId, overrides) => {
+				set({
+					partRegions: get().partRegions.map((r) =>
+						r.id === regionId
+							? { ...r, overrides: { ...r.overrides, ...overrides } }
+							: r
+					),
+				});
+			},
+
+			resetRegionOverride: (regionId) => {
+				set({
+					partRegions: get().partRegions.map((r) =>
+						r.id === regionId ? { ...r, overrides: {} } : r
+					),
+				});
+			},
+
+			setActiveRegionId: (id) => set({ activeRegionId: id }),
 
 			togglePartEditMode: () => set((s) => ({
 				partEditMode: !s.partEditMode,

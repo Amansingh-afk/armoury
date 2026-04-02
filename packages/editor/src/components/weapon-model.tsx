@@ -20,7 +20,7 @@ import {
 import { Mesh as ThreeMesh } from "three";
 import type { LayerStack } from "../painting/layer-stack";
 import { type UVIndex, buildUVIndex } from "../painting/uv-lookup";
-import { buildRegionPropertyMap } from "../painting/region-texture";
+import { buildRegionPropertyMap, applyRegionColorOverrides } from "../painting/region-texture";
 
 export interface StickerPreview {
 	image: ImageBitmap;
@@ -284,6 +284,18 @@ export function WeaponModel({
 			if (cached) ctx.putImageData(cached, 0, 0);
 		}
 
+		// Apply region color overrides (removeTexture / colorTint)
+		if (uvIndex && partRegions.length > 0) {
+			const hasColorOverride = partRegions.some(
+				(r) => r.overrides.removeTexture || r.overrides.colorTint,
+			);
+			if (hasColorOverride) {
+				const imgData = ctx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+				applyRegionColorOverrides(imgData, partRegions, uvIndex);
+				ctx.putImageData(imgData, 0, 0);
+			}
+		}
+
 		// Draw sticker preview at UV position
 		if (stickerPreview && previewUV) {
 			const w = canvasRef.current.width;
@@ -312,6 +324,11 @@ export function WeaponModel({
 	useEffect(() => {
 		textureDirty = true;
 	}, [textureVersion]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: region changes must trigger texture redraw for color overrides
+	useEffect(() => {
+		textureDirty = true;
+	}, [partRegions]);
 
 	// Wireframe overlay
 	useEffect(() => {

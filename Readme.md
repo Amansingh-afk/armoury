@@ -41,10 +41,10 @@ pnpm lint:fix # Biome + auto-fix
 
 - Procedural fills: solid, camo variants, carbon fiber, stripes (several styles), checker, noise, gradient, damascus, marble, wood, geometric, triangles, dots, diamond, scales, tribal — pick colors and apply to the active layer or **apply pattern to all layers** from the style panel
 
-**Images**
+**Images & Stickers**
 
 - **Import image** — stretch, tile, or **place** (project from the current 3D view onto the UV texture)
-- **Add sticker** — drops a place-mode layer you can move on the model
+- **Stickers** — CS2-style predefined slot positions per weapon. Import a sticker, cycle between slots with arrow keys or `< >` buttons. Stickers are **3D decal-projected** onto the mesh surface so they wrap correctly across UV islands instead of bleeding or getting cropped.
 - Drag-and-drop images onto the editor window to import
 
 **Viewport**
@@ -53,10 +53,18 @@ pnpm lint:fix # Biome + auto-fix
 - **Pan** vs **brush** tools (2D / split)
 - Brush: size, color, opacity, hardness
 
+**Parts & Regions**
+
+- **Edit Parts mode** — hover to highlight UV islands, right-click to create a region, shift-click to add islands to the active region
+- **Per-region overrides** — remove texture, color tint, roughness, metalness, and wear level per region
+- Import images scoped to a specific region (masked to UV island boundaries)
+
 **Material & wear**
 
 - Sliders for roughness and metallic, plus presets: Matte, Satin, Glossy, Metallic, Chrome, Battle-Scarred
 - Wear: level, base tint, sharpness (Factory New → beat-up)
+- **Curvature-aware wear** — edges and corners wear faster, curved scratches instead of random blotches
+- Per-region roughness/metalness texture maps baked from UV island rasterization
 
 **History**
 
@@ -85,6 +93,7 @@ When a layer is in **place** mode (typical for stickers):
 | `R` | Reset rotation to 0 |
 | `Shift` + mouse wheel | Rotate in 15° steps |
 | `Alt` + mouse wheel | Scale |
+| `←` / `→` | Cycle sticker between predefined slots |
 
 Shortcuts are ignored while focus is in an input or textarea.
 
@@ -120,8 +129,6 @@ scripts/           GLB pipeline — read scripts/README.md
 
 All 35 CS2 weapons are included, sourced from [Valve’s official workshop resources](https://www.counter-strike.net/workshop/workshopresources) with exact UV layouts for Workshop compatibility. See **`scripts/README.md`** for how to add more.
 
-Switching weapon **remounts** the editor, so layer work doesn’t carry across guns yet.
-
 ---
 
 ## Stack
@@ -134,7 +141,7 @@ React 19, Next.js 15, TypeScript, Three.js, React Three Fiber, Drei, Zustand, Ca
 
 - No project **save/load** — refresh loses work unless you exported.
 - **Heavy 4K** sessions may stutter; compositing is still Canvas2D-first.
-- No per-pixel **roughness/metal** paint maps — global sliders + presets only.
+- Switching weapon remounts the editor — layer work doesn't carry across guns yet.
 
 ---
 
@@ -142,10 +149,10 @@ React 19, Next.js 15, TypeScript, Three.js, React Three Fiber, Drei, Zustand, Ca
 
 **Up next**
 
-- [ ] Per-pixel roughness map painting — separate layer stack for roughness so different parts of the gun have different material finish (glossy logo on matte body, chrome accents on rubberized grip)
 - [ ] Normal map painting — paint height/depth to generate normal maps for engraved text, raised patterns, surface scratches
 - [ ] Save / load projects (IndexedDB) — persist layers, settings, weapon selection across sessions
 - [ ] Eraser tool — paint to add coverage, erase to reveal bare metal (alpha=0 in export)
+- [ ] Per-region image layering — paint different images/materials to different parts of the gun after removing the base texture
 
 **Workshop-ready**
 
@@ -168,7 +175,7 @@ React 19, Next.js 15, TypeScript, Three.js, React Three Fiber, Drei, Zustand, Ca
 - [ ] Advanced brush — custom brush shapes, smudge, blur, sharpen
 - [ ] Layer lock toggle — prevent accidental edits
 - [ ] Color palette / saved swatches
-- [ ] Flip / mirror image layers
+- [ ] Fine-tune sticker slot positions per weapon (community feedback)
 - [ ] Mobile device warning
 
 ---

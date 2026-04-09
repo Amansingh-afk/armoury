@@ -25,6 +25,10 @@ interface ToolbarProps {
 	onToggleWireframe: () => void;
 	partEditMode: boolean;
 	onTogglePartEditMode: () => void;
+	hasStickerActive: boolean;
+	selectedSlotName: string | null;
+	stickerSlotCount: number;
+	onCycleSlot: (direction: 1 | -1) => void;
 	viewMode: ViewMode;
 	onSetViewMode: (mode: ViewMode) => void;
 	activeTool: Tool;
@@ -51,6 +55,10 @@ export function Toolbar({
 	onToggleWireframe,
 	partEditMode,
 	onTogglePartEditMode,
+	hasStickerActive,
+	selectedSlotName,
+	stickerSlotCount,
+	onCycleSlot,
 	viewMode,
 	onSetViewMode,
 	activeTool,
@@ -105,15 +113,18 @@ export function Toolbar({
 				type="button"
 				onClick={onImportImage}
 				className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500"
+				title="Import image as base layer (covers full UV)"
 			>
-				Import Image
+				Base Image
 			</button>
+			<div className="mx-1 h-4 w-px bg-zinc-700" />
 			<button
 				type="button"
 				onClick={() => stickerInputRef.current?.click()}
 				className="rounded bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-500"
+				title="Add sticker"
 			>
-				Add Sticker
+				Sticker
 			</button>
 			<input
 				ref={stickerInputRef}
@@ -126,6 +137,27 @@ export function Toolbar({
 					e.target.value = "";
 				}}
 			/>
+			{hasStickerActive && stickerSlotCount > 0 && (
+				<div className="flex items-center gap-0.5 ml-1">
+					<button
+						type="button"
+						onClick={() => onCycleSlot(-1)}
+						className="rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-zinc-700"
+					>
+						&lt;
+					</button>
+					<span className="text-[10px] text-zinc-400 min-w-[40px] text-center">
+						{selectedSlotName ?? "—"}
+					</span>
+					<button
+						type="button"
+						onClick={() => onCycleSlot(1)}
+						className="rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-zinc-700"
+					>
+						&gt;
+					</button>
+				</div>
+			)}
 			<div className="mx-2 h-4 w-px bg-zinc-700" />
 			<button
 				type="button"

@@ -17,6 +17,8 @@ export interface UVIndex {
 	islandOf: number[];
 	/** islandId → list of face indices */
 	islandFaces: Map<number, number[]>;
+	/** UV-space curvature mask (width*height Float32Array, 0=flat 1=sharp edge) */
+	curvatureMap?: Float32Array;
 }
 
 export function buildUVIndex(geometry: BufferGeometry): UVIndex {

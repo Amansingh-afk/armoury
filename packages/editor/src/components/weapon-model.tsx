@@ -20,7 +20,8 @@ import {
 import { Mesh as ThreeMesh } from "three";
 import type { LayerStack } from "../painting/layer-stack";
 import { type UVIndex, buildUVIndex } from "../painting/uv-lookup";
-import { buildRegionPropertyMap, applyRegionColorOverrides } from "../painting/region-texture";
+import { buildRegionPropertyMap, applyRegionColorOverrides, applyRegionWear } from "../painting/region-texture";
+import { computeVertexCurvature, bakeCurvatureToUV } from "../painting/curvature";
 
 export interface StickerPreview {
 	image: ImageBitmap;
@@ -40,14 +41,19 @@ interface WeaponModelProps {
 	hoveredFaces: number[];
 	partRegions?: import("../store/editor-store").PartRegion[];
 	uvIndex?: import("../painting/uv-lookup").UVIndex | null;
+	wearBaseColor?: { r: number; g: number; b: number };
+	wearSharpness?: number;
 	onUVEdgesReady?: (edges: Array<[number, number, number, number]>) => void;
 	onUVIndexReady?: (index: UVIndex) => void;
+	onGeometryReady?: (geo: import("three").BufferGeometry) => void;
 	stickerPreview?: StickerPreview | null;
 	onStickerPlace?: (uvX: number, uvY: number) => void;
 	partEditMode?: boolean;
 	onIslandHover?: (faces: number[]) => void;
 	onIslandRightClick?: (islandId: number, screenX: number, screenY: number) => void;
 	onIslandShiftClick?: (islandId: number) => void;
+	stickerSlots?: import("../data/sticker-slots").StickerSlotDef[];
+	onSlotClick?: (slotIndex: number) => void;
 }
 
 let textureDirty = false;
@@ -65,14 +71,19 @@ export function WeaponModel({
 	hoveredFaces,
 	partRegions = [],
 	uvIndex,
+	wearBaseColor = { r: 45, g: 45, b: 48 },
+	wearSharpness = 0.25,
 	onUVEdgesReady,
 	onUVIndexReady,
+	onGeometryReady,
 	stickerPreview,
 	onStickerPlace,
 	partEditMode = false,
 	onIslandHover,
 	onIslandRightClick,
 	onIslandShiftClick,
+	stickerSlots = [],
+	onSlotClick,
 }: WeaponModelProps) {
 	const { scene } = useGLTF(modelPath);
 	const { camera } = useThree();
@@ -284,14 +295,25 @@ export function WeaponModel({
 			if (cached) ctx.putImageData(cached, 0, 0);
 		}
 
-		// Apply region color overrides (removeTexture / colorTint)
+		// Apply region overrides (color + wear)
 		if (uvIndex && partRegions.length > 0) {
 			const hasColorOverride = partRegions.some(
 				(r) => r.overrides.removeTexture || r.overrides.colorTint,
 			);
-			if (hasColorOverride) {
+			const hasWearOverride = partRegions.some(
+				(r) => r.overrides.wearLevel != null && r.overrides.wearLevel > 0,
+			);
+			if (hasColorOverride || hasWearOverride) {
 				const imgData = ctx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
-				applyRegionColorOverrides(imgData, partRegions, uvIndex);
+				if (hasColorOverride) {
+					applyRegionColorOverrides(imgData, partRegions, uvIndex);
+				}
+				if (hasWearOverride) {
+					applyRegionWear(
+						imgData, partRegions, uvIndex, wearBaseColor, wearSharpness,
+						layerStack.getNoiseField(), layerStack.getCurvatureMask(),
+					);
+				}
 				ctx.putImageData(imgData, 0, 0);
 			}
 		}
@@ -370,21 +392,32 @@ export function WeaponModel({
 		};
 	}, [scene, showWireframe]);
 
-	// Build UV index for island detection
+	// Build UV index for island detection + curvature mask
 	useEffect(() => {
 		if (!onUVIndexReady) return;
 		scene.traverse((child) => {
 			if ("isMesh" in child && child.isMesh) {
 				const mesh = child as ThreeMesh;
 				const index = buildUVIndex(mesh.geometry);
+
+				// Compute edge curvature and bake into UV space
+				const vertCurv = computeVertexCurvature(mesh.geometry);
+				if (vertCurv.length > 0) {
+					index.curvatureMap = bakeCurvatureToUV(mesh.geometry, vertCurv, 2048, 2048);
+					layerStack.setCurvatureMask(index.curvatureMap);
+				}
+
 				onUVIndexReady(index);
+				onGeometryReady?.(mesh.geometry);
 			}
 		});
-	}, [scene, onUVIndexReady]);
+	}, [scene, onUVIndexReady, onGeometryReady, layerStack]);
 
-	// Raycast for 3D sticker placement
+	// Raycast for 3D sticker placement (freeform — only when no predefined slots)
 	useEffect(() => {
 		if (!stickerPreview || !onStickerPlace) return;
+		// When predefined slots exist, stickers snap to slots — no freeform hover/place
+		if (stickerSlots.length > 0) return;
 		const canvas = gl.domElement;
 
 		const getUVFromEvent = (e: PointerEvent): { x: number; y: number } | null => {
@@ -450,7 +483,7 @@ export function WeaponModel({
 			stickerUVRef.current = null;
 			lastPreviewUV.current = null;
 		};
-	}, [stickerPreview, onStickerPlace, gl, camera, scene]);
+	}, [stickerPreview, onStickerPlace, stickerSlots, gl, camera, scene]);
 
 	// Part edit mode: UV island hover, right-click, shift+click
 	useEffect(() => {
@@ -606,5 +639,185 @@ export function WeaponModel({
 		};
 	}, [scene, hoveredFaces]);
 
+	// Sticker slot markers
+	const slotMarkersRef = useRef<ThreeMesh[]>([]);
+
+	useEffect(() => {
+		// Clean up previous markers
+		for (const marker of slotMarkersRef.current) {
+			marker.parent?.remove(marker);
+			marker.geometry.dispose();
+			(marker.material as MeshBasicMaterial).dispose();
+		}
+		slotMarkersRef.current = [];
+
+		if (stickerSlots.length === 0 || !uvIndex) return;
+
+		// Find mesh to get geometry
+		let targetMesh: ThreeMesh | null = null;
+		scene.traverse((child) => {
+			if ("isMesh" in child && child.isMesh && !child.userData.isHighlight && !child.userData.isWireframeOverlay && !child.userData.isSlotMarker) {
+				if (!targetMesh) targetMesh = child as ThreeMesh;
+			}
+		});
+		if (!targetMesh) return;
+
+		const srcGeo = (targetMesh as ThreeMesh).geometry;
+		const posAttr = srcGeo.getAttribute("position");
+		const uvAttr = srcGeo.getAttribute("uv");
+		const indexAttr = srcGeo.index;
+		if (!posAttr || !uvAttr || !indexAttr) return;
+
+		for (let i = 0; i < stickerSlots.length; i++) {
+			const slot = stickerSlots[i];
+			const pos = uvTo3D(slot.uvX, slot.uvY, uvIndex, posAttr, uvAttr, indexAttr);
+			if (!pos) continue;
+
+			const geo = new BufferGeometry();
+			const s = 0.003;
+			const verts = new Float32Array([
+				0, s, 0,  s, 0, 0,  0, 0, s,
+				0, s, 0,  0, 0, s,  -s, 0, 0,
+				0, s, 0,  -s, 0, 0,  0, 0, -s,
+				0, s, 0,  0, 0, -s,  s, 0, 0,
+				0, -s, 0,  0, 0, s,  s, 0, 0,
+				0, -s, 0,  -s, 0, 0,  0, 0, s,
+				0, -s, 0,  0, 0, -s,  -s, 0, 0,
+				0, -s, 0,  s, 0, 0,  0, 0, -s,
+			]);
+			geo.setAttribute("position", new BufferAttribute(verts, 3));
+
+			const mat = new MeshBasicMaterial({
+				color: 0xff4488,
+				transparent: true,
+				opacity: 0.9,
+				side: DoubleSide,
+				depthTest: false,
+			});
+
+			const marker = new ThreeMesh(geo, mat);
+			marker.position.set(pos.x, pos.y, pos.z);
+			marker.userData.isSlotMarker = true;
+			marker.userData.slotIndex = i;
+			(targetMesh as ThreeMesh).add(marker);
+			slotMarkersRef.current.push(marker);
+		}
+
+		return () => {
+			for (const marker of slotMarkersRef.current) {
+				marker.parent?.remove(marker);
+				marker.geometry.dispose();
+				(marker.material as MeshBasicMaterial).dispose();
+			}
+			slotMarkersRef.current = [];
+		};
+	}, [scene, stickerSlots, uvIndex]);
+
+	// Sticker mode: click slot to place sticker
+	useEffect(() => {
+		if (!stickerPreview || !onSlotClick || stickerSlots.length === 0) return;
+		const canvas = gl.domElement;
+
+		const handleClick = (e: MouseEvent) => {
+			if (e.button !== 0) return;
+			const rect = canvas.getBoundingClientRect();
+			pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+			pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+			raycaster.setFromCamera(pointer, camera);
+
+			// Check slot markers first
+			const markers = slotMarkersRef.current;
+			if (markers.length > 0) {
+				const intersects = raycaster.intersectObjects(markers, false);
+				if (intersects.length > 0) {
+					const idx = intersects[0].object.userData.slotIndex;
+					if (idx != null) {
+						onSlotClick(idx);
+						return;
+					}
+				}
+			}
+
+			// Also check proximity to slot UV positions via mesh raycast
+			const meshes: ThreeMesh[] = [];
+			scene.traverse((child) => {
+				if ("isMesh" in child && child.isMesh && !child.userData.isHighlight && !child.userData.isWireframeOverlay && !child.userData.isSlotMarker) {
+					meshes.push(child as ThreeMesh);
+				}
+			});
+
+			const meshIntersects = raycaster.intersectObjects(meshes, false);
+			if (meshIntersects.length > 0 && meshIntersects[0].uv) {
+				const hitUV = meshIntersects[0].uv;
+				let nearestIdx: number | null = null;
+				let nearestDist = 0.05;
+				for (let i = 0; i < stickerSlots.length; i++) {
+					const slot = stickerSlots[i];
+					const dx = hitUV.x - slot.uvX;
+					const dy = hitUV.y - slot.uvY;
+					const dist = Math.sqrt(dx * dx + dy * dy);
+					if (dist < nearestDist) {
+						nearestDist = dist;
+						nearestIdx = i;
+					}
+				}
+				if (nearestIdx != null) {
+					onSlotClick(nearestIdx);
+				}
+			}
+		};
+
+		canvas.addEventListener("click", handleClick);
+		return () => {
+			canvas.removeEventListener("click", handleClick);
+		};
+	}, [stickerPreview, onSlotClick, stickerSlots, gl, camera, scene]);
+
 	return <primitive object={scene} />;
+}
+
+/** Convert UV coordinates to 3D position by finding the containing triangle and interpolating */
+function uvTo3D(
+	uvX: number,
+	uvY: number,
+	uvIndex: UVIndex,
+	posAttr: any,
+	uvAttr: any,
+	indexAttr: any,
+): { x: number; y: number; z: number } | null {
+	for (const tri of uvIndex.triangles) {
+		if (uvX < tri.minX || uvX > tri.maxX || uvY < tri.minY || uvY > tri.maxY) continue;
+
+		const { uvA, uvB, uvC } = tri;
+
+		// Barycentric test
+		const v0x = uvC.x - uvA.x, v0y = uvC.y - uvA.y;
+		const v1x = uvB.x - uvA.x, v1y = uvB.y - uvA.y;
+		const v2x = uvX - uvA.x, v2y = uvY - uvA.y;
+
+		const dot00 = v0x * v0x + v0y * v0y;
+		const dot01 = v0x * v1x + v0y * v1y;
+		const dot02 = v0x * v2x + v0y * v2y;
+		const dot11 = v1x * v1x + v1y * v1y;
+		const dot12 = v1x * v2x + v1y * v2y;
+
+		const inv = 1 / (dot00 * dot11 - dot01 * dot01);
+		const u = (dot11 * dot02 - dot01 * dot12) * inv;
+		const v = (dot00 * dot12 - dot01 * dot02) * inv;
+
+		if (u >= 0 && v >= 0 && u + v <= 1) {
+			const w = 1 - u - v;
+			const i = tri.faceIndex * 3;
+			const ai = indexAttr.getX(i);
+			const bi = indexAttr.getX(i + 1);
+			const ci = indexAttr.getX(i + 2);
+
+			return {
+				x: posAttr.getX(ai) * w + posAttr.getX(bi) * v + posAttr.getX(ci) * u,
+				y: posAttr.getY(ai) * w + posAttr.getY(bi) * v + posAttr.getY(ci) * u,
+				z: posAttr.getZ(ai) * w + posAttr.getZ(bi) * v + posAttr.getZ(ci) * u,
+			};
+		}
+	}
+	return null;
 }

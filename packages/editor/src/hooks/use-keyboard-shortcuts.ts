@@ -8,9 +8,12 @@ interface KeyboardShortcutHandlers {
 	getActivePlaceTransform: () => { layerId: number; transform: ImageTransform } | null;
 	onImageTransformChange: (layerId: number, partial: Partial<ImageTransform>) => void;
 	onTogglePartEditMode: () => void;
+	onCycleSlot?: (direction: 1 | -1) => void;
+	hasStickerSlots?: boolean;
 }
 
 const SCALE_STEP = 0.02;
+const MOVE_STEP = 0.01;
 const ROTATION_SNAP = Math.PI / 12; // 15 degrees
 
 export function useKeyboardShortcuts({
@@ -20,6 +23,8 @@ export function useKeyboardShortcuts({
 	getActivePlaceTransform,
 	onImageTransformChange,
 	onTogglePartEditMode,
+	onCycleSlot,
+	hasStickerSlots = false,
 }: KeyboardShortcutHandlers) {
 	useEffect(() => {
 		const handleKey = (e: KeyboardEvent) => {
@@ -54,6 +59,30 @@ export function useKeyboardShortcuts({
 			const { layerId, transform } = place;
 
 			switch (e.key) {
+				case "ArrowLeft":
+					e.preventDefault();
+					if (hasStickerSlots && onCycleSlot) {
+						onCycleSlot(-1);
+					} else {
+						onImageTransformChange(layerId, { x: transform.x - MOVE_STEP });
+					}
+					break;
+				case "ArrowRight":
+					e.preventDefault();
+					if (hasStickerSlots && onCycleSlot) {
+						onCycleSlot(1);
+					} else {
+						onImageTransformChange(layerId, { x: transform.x + MOVE_STEP });
+					}
+					break;
+				case "ArrowUp":
+					e.preventDefault();
+					onImageTransformChange(layerId, { y: transform.y - MOVE_STEP });
+					break;
+				case "ArrowDown":
+					e.preventDefault();
+					onImageTransformChange(layerId, { y: transform.y + MOVE_STEP });
+					break;
 				case "[":
 					e.preventDefault();
 					onImageTransformChange(layerId, {
@@ -63,7 +92,7 @@ export function useKeyboardShortcuts({
 				case "]":
 					e.preventDefault();
 					onImageTransformChange(layerId, {
-						scale: Math.min(0.8, transform.scale + SCALE_STEP),
+						scale: Math.min(2, transform.scale + SCALE_STEP),
 					});
 					break;
 				case "h":
@@ -99,7 +128,7 @@ export function useKeyboardShortcuts({
 				e.preventDefault();
 				const factor = e.deltaY < 0 ? SCALE_STEP : -SCALE_STEP;
 				onImageTransformChange(layerId, {
-					scale: Math.max(0.02, Math.min(0.8, transform.scale + factor)),
+					scale: Math.max(0.02, Math.min(2, transform.scale + factor)),
 				});
 			}
 		};
@@ -110,5 +139,5 @@ export function useKeyboardShortcuts({
 			window.removeEventListener("keydown", handleKey);
 			window.removeEventListener("wheel", handleWheel);
 		};
-	}, [onUndo, onRedo, onEscape, getActivePlaceTransform, onImageTransformChange, onTogglePartEditMode]);
+	}, [onUndo, onRedo, onEscape, getActivePlaceTransform, onImageTransformChange, onTogglePartEditMode, onCycleSlot, hasStickerSlots]);
 }

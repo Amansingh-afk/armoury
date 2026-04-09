@@ -64,6 +64,9 @@ export class Layer {
 
 	image: ImageBitmap | null = null;
 	imageTransform: ImageTransform = { ...DEFAULT_IMAGE_TRANSFORM };
+	regionId: number | null = null;
+	/** When set, this layer uses 3D decal projection instead of 2D UV placement */
+	decalUV: { uvX: number; uvY: number } | null = null;
 
 	constructor(
 		public name: string,

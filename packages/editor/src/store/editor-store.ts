@@ -4,8 +4,11 @@ import { type PatternType, fillPattern } from "../painting/fill";
 import { STICKER_IMAGE_TRANSFORM } from "../painting/layer";
 import type { BlendMode, ColorAdjust, ImageTransform } from "../painting/layer";
 import { LayerStack } from "../painting/layer-stack";
+import { type DecalParams, projectDecalToTexture } from "../painting/projection";
+import { maskCanvasToRegion } from "../painting/region-texture";
 import type { BrushSettings } from "../painting/types";
 import type { UVIndex } from "../painting/uv-lookup";
+import type { BufferGeometry } from "three";
 
 export type Tool = "pan" | "brush";
 export type ViewMode = "3d" | "2d" | "split";
@@ -47,11 +50,13 @@ export interface EditorState {
 	viewMode: ViewMode;
 	uvEdges: Array<[number, number, number, number]>;
 	uvIndex: UVIndex | null;
+	geometry: BufferGeometry | null;
 	hoveredFaces: number[];
   partRegions: PartRegion[];
   regionCount: number;
   activeRegionId: number | null;  // region whose context menu is open
   partEditMode: boolean;
+  selectedSlotIndex: number;
 
 	setBrush: (partial: Partial<BrushSettings>) => void;
 	setTool: (tool: Tool) => void;
@@ -71,8 +76,9 @@ export interface EditorState {
 	importImage: (file: File) => Promise<void>;
 	importSticker: (file: File) => Promise<void>;
 	importImageBitmap: (bitmap: ImageBitmap, name: string) => void;
-	importStickerBitmap: (bitmap: ImageBitmap, name: string) => void;
-	setImageTransform: (layerId: number, transform: Partial<ImageTransform>) => void;
+	importImageBitmapToRegion: (bitmap: ImageBitmap, name: string, regionId: number) => void;
+	importStickerBitmap: (bitmap: ImageBitmap, name: string, slotUV?: { uvX: number; uvY: number }) => void;
+	setImageTransform: (layerId: number, transform: Partial<ImageTransform>, slotUV?: { uvX: number; uvY: number }) => void;
 	setBlendMode: (layerId: number, mode: BlendMode) => void;
 	setColorAdjust: (layerId: number, partial: Partial<ColorAdjust>) => void;
 	setEmboss: (layerId: number, enabled: boolean, strength?: number) => void;
@@ -82,6 +88,7 @@ export interface EditorState {
 	setViewMode: (mode: ViewMode) => void;
 	setUVEdges: (edges: Array<[number, number, number, number]>) => void;
 	setUVIndex: (index: UVIndex) => void;
+	setGeometry: (geo: BufferGeometry) => void;
 	setHoveredFaces: (faces: number[]) => void;
   createRegion: (islandIds: number[]) => number;   // returns new region ID
   addIslandsToRegion: (regionId: number, islandIds: number[]) => void;
@@ -90,6 +97,8 @@ export interface EditorState {
   resetRegionOverride: (regionId: number) => void;
   setActiveRegionId: (id: number | null) => void;
   togglePartEditMode: () => void;
+  setSelectedSlotIndex: (index: number) => void;
+  cycleSlot: (direction: 1 | -1, slotCount: number) => void;
 	paintStroke: (points: Array<{ x: number; y: number }>) => void;
 }
 
@@ -127,11 +136,13 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 			viewMode: "3d",
 			uvEdges: [],
 			uvIndex: null,
+			geometry: null,
 			hoveredFaces: [],
 			partRegions: [],
 			regionCount: 0,
 			activeRegionId: null,
 			partEditMode: false,
+			selectedSlotIndex: 0,
 
 			setBrush: (partial) => set((state) => ({ brush: { ...state.brush, ...partial } })),
 
@@ -273,21 +284,84 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 				bumpTexture();
 			},
 
-			importStickerBitmap: (bitmap, name) => {
+			importImageBitmapToRegion: (bitmap, name, regionId) => {
+				const state = get();
+				const region = state.partRegions.find((r) => r.id === regionId);
+				const uv = state.uvIndex;
+				if (!region || !uv) return;
+
 				const layer = layerStack.addLayer();
-				layer.name = `⬡ ${name.replace(/\.[^.]+$/, "")}`;
+				layer.name = `${name.replace(/\.[^.]+$/, "")} [Decal: ${region.name}]`;
 				layer.opacity = 1;
-				layer.setImage(bitmap, STICKER_IMAGE_TRANSFORM);
+				layer.regionId = regionId;
+				layer.setImage(bitmap, {
+					scale: 1,
+					fillMode: "place",
+					x: 0.5,
+					y: 0.5,
+					rotation: 0,
+					flipX: false,
+					flipY: false,
+				});
 				layer.renderImage();
+				maskCanvasToRegion(layer.textureCanvas, region, uv);
 				set({ activeLayerId: layer.id });
 				bumpTexture();
 			},
 
-			setImageTransform: (layerId, partial) => {
+			importStickerBitmap: (bitmap, name, slotUV) => {
+				const state = get();
+				const layer = layerStack.addLayer();
+				layer.name = `⬡ ${name.replace(/\.[^.]+$/, "")}`;
+				layer.opacity = 1;
+				layer.setImage(bitmap, STICKER_IMAGE_TRANSFORM);
+				if (slotUV) {
+					layer.decalUV = { uvX: slotUV.uvX, uvY: slotUV.uvY };
+				}
+				// Use 3D decal projection if geometry is available, otherwise fall back to 2D
+				if (layer.decalUV && state.geometry && layer.image) {
+					projectDecalToTexture(layer.textureCanvas, state.geometry, layer.image, {
+						uvX: layer.decalUV.uvX,
+						uvY: layer.decalUV.uvY,
+						scale: layer.imageTransform.scale,
+						rotation: layer.imageTransform.rotation,
+					});
+				} else {
+					layer.renderImage();
+				}
+				set({ activeLayerId: layer.id });
+				bumpTexture();
+			},
+
+			setImageTransform: (layerId, partial, slotUV) => {
 				const layer = layerStack.layers.find((l) => l.id === layerId);
 				if (!layer || !layer.isImageLayer) return;
 				Object.assign(layer.imageTransform, partial);
+				if (slotUV) {
+					layer.decalUV = { uvX: slotUV.uvX, uvY: slotUV.uvY };
+				}
+				// Use 3D decal projection for slot-based stickers
+				if (layer.decalUV && layer.image) {
+					const state = get();
+					if (state.geometry) {
+						projectDecalToTexture(layer.textureCanvas, state.geometry, layer.image, {
+							uvX: layer.decalUV.uvX,
+							uvY: layer.decalUV.uvY,
+							scale: layer.imageTransform.scale,
+							rotation: layer.imageTransform.rotation,
+						});
+						bumpTexture();
+						return;
+					}
+				}
 				layer.renderImage();
+				// Re-mask if this is a region-scoped layer
+				if (layer.regionId != null) {
+					const state = get();
+					const region = state.partRegions.find((r) => r.id === layer.regionId);
+					const uv = state.uvIndex;
+					if (region && uv) maskCanvasToRegion(layer.textureCanvas, region, uv);
+				}
 				bumpTexture();
 			},
 
@@ -339,6 +413,8 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 			setUVEdges: (edges) => set({ uvEdges: edges }),
 
 			setUVIndex: (index) => set({ uvIndex: index }),
+
+			setGeometry: (geo) => set({ geometry: geo }),
 
 			setHoveredFaces: (faces) => set({ hoveredFaces: faces }),
 
@@ -399,6 +475,13 @@ export function createEditorStore(textureWidth: number, textureHeight: number) {
 				partEditMode: !s.partEditMode,
 			})),
 
+			setSelectedSlotIndex: (index) => set({ selectedSlotIndex: index }),
+
+			cycleSlot: (direction, slotCount) => {
+				if (slotCount === 0) return;
+				const next = (get().selectedSlotIndex + direction + slotCount) % slotCount;
+				set({ selectedSlotIndex: next });
+			},
 
 			paintStroke: (points) => {
 				const state = get();

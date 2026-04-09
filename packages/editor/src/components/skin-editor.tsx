@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { downloadBlob } from "../export/download";
 import { dilateSeams } from "../export/seam-dilation";
@@ -20,6 +20,7 @@ import { Viewport } from "./viewport";
 import type { StickerPreview } from "./weapon-model";
 import { WeaponModel } from "./weapon-model";
 import { PartContextMenu } from "./part-context-menu";
+import { getStickerSlots } from "../data/sticker-slots";
 
 export type { WeaponPickerOption };
 
@@ -63,19 +64,27 @@ export function SkinEditor({
 	const partRegions = useStore(store, (s) => s.partRegions);
 	const activeRegionId = useStore(store, (s) => s.activeRegionId);
 	const partEditMode = useStore(store, (s) => s.partEditMode);
+	const selectedSlotIndex = useStore(store, (s) => s.selectedSlotIndex);
+
+	const weaponId = modelPath.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
+	const stickerSlots = getStickerSlots(weaponId);
+	const selectedSlot = stickerSlots[selectedSlotIndex] ?? null;
 
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [showWireframe, setShowWireframe] = useState(true);
-	const [importDialogFile, setImportDialogFile] = useState<{ file: File; mode: "image" | "sticker" } | null>(null);
+	const [importDialogFile, setImportDialogFile] = useState<{ file: File; mode: "image" | "sticker"; regionId?: number } | null>(null);
 	const [contextMenu, setContextMenu] = useState<{ regionId: number; x: number; y: number } | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const decalFileInputRef = useRef<HTMLInputElement>(null);
+	const pendingRegionIdRef = useRef<number | null>(null);
 
 	const activeLayer = layerStack.layers.find((l) => l.id === activeLayerId);
 
-	// Build sticker preview for 3D placement when active layer is a place-mode image
+	// Build sticker preview for 3D placement when active layer is a place-mode image (not region-scoped)
 	const stickerPreview: StickerPreview | null = (() => {
 		if (!activeLayer?.isImageLayer || !activeLayer.image) return null;
 		if (activeLayer.imageTransform.fillMode !== "place") return null;
+		if (activeLayer.regionId != null) return null; // region layers use style panel / arrow keys
 		return {
 			image: activeLayer.image,
 			scale: activeLayer.imageTransform.scale,
@@ -88,11 +97,40 @@ export function SkinEditor({
 	const handleStickerPlace = useCallback(
 		(uvX: number, uvY: number) => {
 			if (!activeLayer?.isImageLayer) return;
+			// If slots are defined, don't allow freeform placement
+			if (stickerSlots.length > 0) return;
 			store.getState().pushUndo();
 			store.getState().setImageTransform(activeLayer.id, { x: uvX, y: uvY });
 		},
 		[store, activeLayer],
 	);
+
+	const handleSlotClick = useCallback(
+		(slotIndex: number) => {
+			if (!activeLayer?.isImageLayer) return;
+			const slot = stickerSlots[slotIndex];
+			if (!slot) return;
+			store.getState().setSelectedSlotIndex(slotIndex);
+			store.getState().setImageTransform(activeLayer.id, {
+				x: slot.uvX,
+				y: slot.uvY,
+				rotation: slot.rotation,
+			}, { uvX: slot.uvX, uvY: slot.uvY });
+		},
+		[store, activeLayer, stickerSlots],
+	);
+
+	// Auto-place sticker at selected slot when cycling
+	useEffect(() => {
+		if (!activeLayer?.isImageLayer || activeLayer.regionId != null) return;
+		if (activeLayer.imageTransform.fillMode !== "place") return;
+		if (!selectedSlot) return;
+		store.getState().setImageTransform(activeLayer.id, {
+			x: selectedSlot.uvX,
+			y: selectedSlot.uvY,
+			rotation: selectedSlot.rotation,
+		}, { uvX: selectedSlot.uvX, uvY: selectedSlot.uvY });
+	}, [selectedSlotIndex, selectedSlot, activeLayer, store]);
 
 	const handleIslandHover = useCallback(
 		(faces: number[]) => {
@@ -147,6 +185,26 @@ export function SkinEditor({
 		[store],
 	);
 
+	const handleApplyDecal = useCallback(
+		(regionId: number) => {
+			pendingRegionIdRef.current = regionId;
+			decalFileInputRef.current?.click();
+		},
+		[],
+	);
+
+	const handleDecalFileInputChange = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => {
+			const file = e.target.files?.[0];
+			if (file && file.type.startsWith("image/")) {
+				setImportDialogFile({ file, mode: "image", regionId: pendingRegionIdRef.current ?? undefined });
+				setContextMenu(null);
+			}
+			e.target.value = "";
+		},
+		[],
+	);
+
 	const handleImportFile = useCallback(
 		(file: File) => {
 			if (!file.type.startsWith("image/")) return;
@@ -166,9 +224,22 @@ export function SkinEditor({
 	const handleImportConfirm = useCallback(
 		async (result: ImageImportResult) => {
 			const mode = importDialogFile?.mode ?? "image";
+			const regionId = importDialogFile?.regionId;
 			setImportDialogFile(null);
-			if (mode === "sticker") {
-				await store.getState().importStickerBitmap(result.bitmap, importDialogFile?.file.name ?? "sticker");
+			if (regionId != null) {
+				store.getState().importImageBitmapToRegion(result.bitmap, importDialogFile?.file.name ?? "image", regionId);
+			} else if (mode === "sticker") {
+				const slot = stickerSlots[store.getState().selectedSlotIndex];
+				const slotUV = slot ? { uvX: slot.uvX, uvY: slot.uvY } : undefined;
+				await store.getState().importStickerBitmap(result.bitmap, importDialogFile?.file.name ?? "sticker", slotUV);
+				// Auto-place at selected slot if slots exist
+				if (slot) {
+					store.getState().setImageTransform(store.getState().activeLayerId, {
+						x: slot.uvX,
+						y: slot.uvY,
+						rotation: slot.rotation,
+					}, { uvX: slot.uvX, uvY: slot.uvY });
+				}
 			} else {
 				await store.getState().importImageBitmap(result.bitmap, importDialogFile?.file.name ?? "image");
 			}
@@ -282,6 +353,13 @@ export function SkinEditor({
 		[store],
 	);
 
+	const handleGeometryReady = useCallback(
+		(geo: import("three").BufferGeometry) => {
+			store.getState().setGeometry(geo);
+		},
+		[store],
+	);
+
 	const getActivePlaceTransform = useCallback(() => {
 		const state = store.getState();
 		const layer = state.layerStack.layers.find((l) => l.id === state.activeLayerId);
@@ -303,6 +381,8 @@ export function SkinEditor({
 		getActivePlaceTransform,
 		onImageTransformChange: handleImageTransformChange,
 		onTogglePartEditMode: () => store.getState().togglePartEditMode(),
+		onCycleSlot: (dir) => store.getState().cycleSlot(dir, stickerSlots.length),
+		hasStickerSlots: stickerSlots.length > 0,
 	});
 
 	const show3D = viewMode === "3d" || viewMode === "split";
@@ -326,6 +406,10 @@ export function SkinEditor({
 				onToggleWireframe={() => setShowWireframe((v) => !v)}
 				partEditMode={partEditMode}
 				onTogglePartEditMode={() => store.getState().togglePartEditMode()}
+				hasStickerActive={!!activeLayer?.isImageLayer && activeLayer.imageTransform.fillMode === "place" && activeLayer.regionId == null}
+				selectedSlotName={selectedSlot?.name ?? null}
+				stickerSlotCount={stickerSlots.length}
+				onCycleSlot={(dir) => store.getState().cycleSlot(dir, stickerSlots.length)}
 				viewMode={viewMode}
 				onSetViewMode={(mode) => store.getState().setViewMode(mode)}
 				activeTool={activeTool}
@@ -370,14 +454,23 @@ export function SkinEditor({
 										hoveredFaces={hoveredFaces}
 										onUVEdgesReady={handleUVEdgesReady}
 										onUVIndexReady={handleUVIndexReady}
-										stickerPreview={stickerPreview}
+										onGeometryReady={handleGeometryReady}
+										stickerPreview={stickerSlots.length > 0 ? null : stickerPreview}
 										onStickerPlace={handleStickerPlace}
 										partRegions={partRegions}
 										uvIndex={uvIndex}
+										wearBaseColor={{
+											r: Number.parseInt(wearBaseColor.slice(1, 3), 16),
+											g: Number.parseInt(wearBaseColor.slice(3, 5), 16),
+											b: Number.parseInt(wearBaseColor.slice(5, 7), 16),
+										}}
+										wearSharpness={wearSharpness}
 										partEditMode={partEditMode}
 										onIslandHover={handleIslandHover}
 										onIslandRightClick={handleIslandRightClick}
 										onIslandShiftClick={handleIslandShiftClick}
+										stickerSlots={stickerSlots}
+										onSlotClick={handleSlotClick}
 									/>
 								</Suspense>
 							</Viewport>
@@ -396,6 +489,7 @@ export function SkinEditor({
 										onUpdate={(overrides) => handleRegionOverrideUpdate(region.id, overrides)}
 										onReset={() => handleRegionReset(region.id)}
 										onClose={() => setContextMenu(null)}
+										onImportImage={() => handleApplyDecal(region.id)}
 									/>
 								);
 							})()}
@@ -468,6 +562,13 @@ export function SkinEditor({
 				accept="image/*"
 				className="hidden"
 				onChange={handleFileInputChange}
+			/>
+			<input
+				ref={decalFileInputRef}
+				type="file"
+				accept="image/*"
+				className="hidden"
+				onChange={handleDecalFileInputChange}
 			/>
 			{importDialogFile && (
 				<ImageImportDialog

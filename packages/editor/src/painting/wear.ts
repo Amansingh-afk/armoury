@@ -10,22 +10,15 @@ export const WEAR_PRESETS = [
 ] as const;
 
 /**
- * Generate a wear mask at the given level.
- * Uses multi-octave noise + scratch lines.
+ * Generate the raw noise field used for wear patterns.
+ * This is deterministic and only depends on dimensions + seed,
+ * NOT on wearLevel — so it can be cached and reused.
  */
-export function generateWearMask(
+export function generateNoiseField(
 	width: number,
 	height: number,
-	wearLevel: number,
 	seed = 42,
-	sharpness = 0.25,
-): ImageData {
-	const data = new Uint8ClampedArray(width * height * 4);
-	if (wearLevel <= 0) {
-		return new ImageData(data, width, height);
-	}
-
-	// Generate value noise at multiple octaves
+): Float32Array {
 	const noiseMap = new Float32Array(width * height);
 	for (let y = 0; y < height; y++) {
 		for (let x = 0; x < width; x++) {
@@ -39,18 +32,47 @@ export function generateWearMask(
 			noiseMap[y * width + x] = val;
 		}
 	}
+	return noiseMap;
+}
+
+/**
+ * Generate a wear mask from a pre-computed noise field.
+ * This is cheap — just thresholding + scratches.
+ */
+export function generateWearMask(
+	noiseField: Float32Array,
+	width: number,
+	height: number,
+	wearLevel: number,
+	seed = 42,
+	sharpness = 0.25,
+	curvatureMask?: Float32Array | null,
+): ImageData {
+	const data = new Uint8ClampedArray(width * height * 4);
+	if (wearLevel <= 0) {
+		return new ImageData(data, width, height);
+	}
 
 	// Threshold based on wear level
-	// At wearLevel=0, threshold is very high (nothing passes)
-	// At wearLevel=1, threshold is low (most passes)
 	const threshold = 1 - wearLevel * 1.2;
-	// Edge sharpness: higher = harder edges, lower = softer gradient
 	const edgeScale = 1 + sharpness * 8;
 
-	for (let i = 0; i < noiseMap.length; i++) {
+	// Curvature weighting: flat areas get baseFactor, edges get up to 1.0
+	const baseFactor = 0.3;
+	const curvatureWeight = 0.7;
+
+	for (let i = 0; i < noiseField.length; i++) {
+		let noise = noiseField[i];
+
+		// Weight by curvature if available — edges wear more
+		if (curvatureMask) {
+			const curv = curvatureMask[i];
+			noise *= baseFactor + curv * curvatureWeight;
+		}
+
 		let wear = 0;
-		if (noiseMap[i] > threshold) {
-			wear = Math.min(1, (noiseMap[i] - threshold) * edgeScale);
+		if (noise > threshold) {
+			wear = Math.min(1, (noise - threshold) * edgeScale);
 		}
 		const v = Math.round(wear * 255);
 		const p = i * 4;
@@ -60,18 +82,44 @@ export function generateWearMask(
 		data[p + 3] = 255;
 	}
 
-	// Add scratches
+	// Add scratches — curved, clustered near high-curvature areas
 	const scratchCount = Math.floor(wearLevel * 80);
 	for (let s = 0; s < scratchCount; s++) {
-		const sx = pseudoRandom(seed + s * 17) * width;
-		const sy = pseudoRandom(seed + s * 31) * height;
-		const angle = pseudoRandom(seed + s * 43) * Math.PI;
+		let sx: number;
+		let sy: number;
+
+		if (curvatureMask) {
+			// Bias scratch positions toward high-curvature areas
+			let attempts = 0;
+			do {
+				sx = pseudoRandom(seed + s * 17 + attempts * 3) * width;
+				sy = pseudoRandom(seed + s * 31 + attempts * 7) * height;
+				attempts++;
+				const px = Math.min(width - 1, Math.round(sx));
+				const py = Math.min(height - 1, Math.round(sy));
+				const curvVal = curvatureMask[py * width + px];
+				if (curvVal > pseudoRandom(seed + s * 53 + attempts) * 0.5 || attempts > 10) break;
+			} while (true);
+		} else {
+			sx = pseudoRandom(seed + s * 17) * width;
+			sy = pseudoRandom(seed + s * 31) * height;
+		}
+
+		let angle = pseudoRandom(seed + s * 43) * Math.PI;
 		const len = 20 + pseudoRandom(seed + s * 59) * 200 * wearLevel;
 		const intensity = 100 + pseudoRandom(seed + s * 73) * 155;
-		const dx = Math.cos(angle);
-		const dy = Math.sin(angle);
+		let dx = Math.cos(angle);
+		let dy = Math.sin(angle);
 
 		for (let t = 0; t < len; t++) {
+			// Slight curvature to scratches — meander instead of straight lines
+			const perturbation = (pseudoRandom(seed + s * 89 + t) - 0.5) * 0.15;
+			dx += -dy * perturbation;
+			dy += dx * perturbation;
+			// Renormalize direction
+			const mag = Math.sqrt(dx * dx + dy * dy);
+			if (mag > 0) { dx /= mag; dy /= mag; }
+
 			const px = Math.round(sx + dx * t);
 			const py = Math.round(sy + dy * t);
 			if (px < 0 || px >= width || py < 0 || py >= height) continue;

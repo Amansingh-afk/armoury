@@ -30,6 +30,7 @@ interface PartContextMenuProps {
   onUpdate: (overrides: Partial<PartOverrides>) => void;
   onReset: () => void;
   onClose: () => void;
+  onImportImage?: () => void;
 }
 
 export function PartContextMenu({
@@ -43,6 +44,7 @@ export function PartContextMenu({
   onUpdate,
   onReset,
   onClose,
+  onImportImage,
 }: PartContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -93,6 +95,17 @@ export function PartContextMenu({
         <span className="text-xs font-semibold text-zinc-200 truncate">{regionName}</span>
         <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xs px-1">✕</button>
       </div>
+
+      {/* Import Image to Region */}
+      {onImportImage && (
+        <button
+          type="button"
+          onClick={onImportImage}
+          className="w-full rounded bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors text-left"
+        >
+          Apply Decal
+        </button>
+      )}
 
       {/* Remove Image Layer */}
       <div className="flex items-center justify-between">

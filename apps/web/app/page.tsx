@@ -37,6 +37,12 @@ function TopNav() {
 						Flow
 					</a>
 					<Link
+						href="/docs"
+						className="hidden rounded-md px-2 py-1.5 text-zinc-500 transition-colors hover:bg-zinc-800/50 hover:text-zinc-200 sm:inline"
+					>
+						Docs
+					</Link>
+					<Link
 						href="/editor"
 						className="rounded-md bg-blue-600 px-3 py-1.5 text-white shadow-sm shadow-blue-600/20 transition-colors hover:bg-blue-500"
 					>
@@ -449,6 +455,9 @@ function Footer() {
 					<div className="flex flex-wrap items-center justify-center gap-4 text-sm text-zinc-500">
 						<Link href="/editor" className="transition-colors hover:text-orange-200">
 							Editor
+						</Link>
+						<Link href="/docs" className="transition-colors hover:text-zinc-200">
+							Docs
 						</Link>
 						<a href="#preview" className="transition-colors hover:text-emerald-300/90">
 							Showcase

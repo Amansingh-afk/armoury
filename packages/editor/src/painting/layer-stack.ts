@@ -1,6 +1,6 @@
 import { type BlendMode, type ColorAdjust, Layer } from "./layer";
 import { TextureCanvas } from "./texture-canvas";
-import { applyWear, generateWearMask } from "./wear";
+import { applyWear, generateNoiseField, generateWearMask } from "./wear";
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
 	r /= 255;
@@ -143,12 +143,12 @@ export class LayerStack {
 	wearBaseColor = { r: 45, g: 45, b: 48 };
 	wearSharpness = 0.25;
 	private cachedCompositeResult: ImageData | null = null;
+	private cachedNoiseField: Float32Array | null = null;
+	private cachedNoiseSeed = -1;
 	private cachedWearMask: ImageData | null = null;
 	private cachedWearLevel = -1;
 	private cachedWearSharpness = -1;
-	private lastWearGenTime = 0;
-	private pendingWearLevel = -1;
-	private wearGenTimer: ReturnType<typeof setTimeout> | null = null;
+	private curvatureMask: Float32Array | null = null;
 
 	constructor(
 		private width: number,
@@ -182,6 +182,14 @@ export class LayerStack {
 
 	setWear(level: number): void {
 		this.wearLevel = Math.max(0, Math.min(1, level));
+	}
+
+	getNoiseField(): Float32Array | null {
+		return this.cachedNoiseField;
+	}
+
+	getCurvatureMask(): Float32Array | null {
+		return this.curvatureMask;
 	}
 
 	composite(): ImageData {
@@ -327,37 +335,33 @@ export class LayerStack {
 		return this.compositeCanvas.getImageData();
 	}
 
+	setCurvatureMask(mask: Float32Array): void {
+		this.curvatureMask = mask;
+		this.cachedWearMask = null; // force regeneration with new curvature
+		this.cachedNoiseField = null; // noise field size might differ
+	}
+
 	private updateWearMask(): void {
 		if (this.cachedWearLevel === this.wearLevel && this.cachedWearSharpness === this.wearSharpness) return;
 
-		const now = performance.now();
-		const elapsed = now - this.lastWearGenTime;
-		const THROTTLE_MS = 150;
-
-		if (elapsed >= THROTTLE_MS || this.cachedWearMask === null) {
-			this.cachedWearMask = generateWearMask(this.width, this.height, this.wearLevel, 42, this.wearSharpness);
-			this.cachedWearLevel = this.wearLevel;
-			this.cachedWearSharpness = this.wearSharpness;
-			this.lastWearGenTime = now;
-			this.cancelPendingWear();
-		} else if (this.pendingWearLevel !== this.wearLevel || this.cachedWearSharpness !== this.wearSharpness) {
-			this.pendingWearLevel = this.wearLevel;
-			this.cancelPendingWear();
-			this.wearGenTimer = setTimeout(() => {
-				this.cachedWearMask = generateWearMask(this.width, this.height, this.wearLevel, 42, this.wearSharpness);
-				this.cachedWearLevel = this.wearLevel;
-				this.cachedWearSharpness = this.wearSharpness;
-				this.lastWearGenTime = performance.now();
-				this.pendingWearLevel = -1;
-				this.wearGenTimer = null;
-			}, THROTTLE_MS);
+		// Generate noise field once (expensive), cache for reuse
+		const seed = 42;
+		if (!this.cachedNoiseField || this.cachedNoiseSeed !== seed) {
+			this.cachedNoiseField = generateNoiseField(this.width, this.height, seed);
+			this.cachedNoiseSeed = seed;
 		}
-	}
 
-	private cancelPendingWear(): void {
-		if (this.wearGenTimer !== null) {
-			clearTimeout(this.wearGenTimer);
-			this.wearGenTimer = null;
-		}
+		// Re-threshold is cheap — no throttle needed
+		this.cachedWearMask = generateWearMask(
+			this.cachedNoiseField,
+			this.width,
+			this.height,
+			this.wearLevel,
+			seed,
+			this.wearSharpness,
+			this.curvatureMask,
+		);
+		this.cachedWearLevel = this.wearLevel;
+		this.cachedWearSharpness = this.wearSharpness;
 	}
 }
